@@ -1,22 +1,14 @@
-# to do:
-# add/verify suport for readmng.com
+#mangaRock 2.8.10, modified to work on repl.it
 import json
 import requests
 import re
+import os
 import threading
-from itertools import cycle
 from bs4 import BeautifulSoup
 from time import sleep
 
 
-def test():
-	# load('picture')
-	# manga.arc['The Apostle Of Cards'.lower()].update()
-	# for work in All('works'):
-	# work.format()
-	# save('picture')
-	display()
-
+temp_link_var=[]
 
 class OBJ():
 	prop = {'name': None}
@@ -27,7 +19,7 @@ class OBJ():
 		for num, arg in enumerate(args):
 			if arg in ('', None, ['']): arg = tuple(self.prop.items())[num][1]  # if arg is blank then set it to default
 			if type(arg) is tuple: list(arg)  # if arg is a tuple then turn it into a list
-			if type(tuple(self.prop.values())[num]) is int and type(arg) is not float: arg = float(arg)  # if default arg is float and givin arg is not float then float givin arg
+			if type(tuple(self.prop.values())[num]) is int and type(arg) is not float: arg = float(arg)    # if default arg is float and givin arg is not float then float givin arg
 			if type(tuple(self.prop.values())[num]) is list and type(arg) is not list: arg = [arg]  # if default arg is list and givin arg is not list then put givin arg in a list
 			setattr(self, tuple(self.prop)[num], arg)  # set the self arg to givin arg
 		for key, val in kwargs.items():
@@ -40,25 +32,29 @@ class OBJ():
 	def __iter__(self):
 		return self
 
-	def format(self):
-		self.chapter = float(self.chapter)  # to do
-
-	def update(self):  # self.lChs[0][1]: -inf = no link, -2 = link not supported, -1 = Connection Error
-		Map = {  # site:		 find,   with,					  then find, and get, split at,  and float
-			'wuxiaworld.site':  ('ul',  {'class': 'main version-chap'},   'a',  'href', '-|/',   -2),
-			'mangakakalot.com': ('div', {'class': 'chapter-list'},  'a',  'href', '_',  -1),
-			'manganelo.com': ('ul',  {'class': 'row-content-chapter'}, 'a',  'href', '_',  -1),
-			'readmng.com':   ('ul',  {'class': 'chp_lst'},    'a',  'herf', '/',  -1),
-			'www.webtoons.com': ('ul',  {'id': '_listUl'},    'li', 'id',   '_',  -1),
-			# 'kissmanga.org':	('h3',  None,							 'a',  'href', '_',		-1),
-			'mangatoon.mobi':   ('div', {'class': 'episode-count'},    None, None,   ' ',  5),
-			'mangadex.org':  ('a',   {'class': 'text-truncate'},    None, None,   'Ch. | - ', 1)
+	def update(self):  # self.lChs[0][1]: -inf = no link, -3 = parsing error, -2 = link not supported, -1 = Connection Error
+		Map = {  # site:         find,   with,                      then find, and get, split at,  and float
+			'wuxiaworld.site':    ('ul',  {'class': 'main version-chap'},   'a',  'href', '-|/',      -2),
+			'mangakakalot.com':   ('div', {'class': 'chapter-list'},        'a',  'href', '_',        -1),
+			'manganato.com':      ('ul',  {'class': 'row-content-chapter'}, 'a',  'href', '-',        -1),
+			'readmng.com':        ('ul',  {'class': 'chp_lst'},             'a',  'href', '/',        -1),
+			'www.webtoons.com':   ('ul',  {'id': '_listUl'},                'li', 'id',   '_',        -1),
+			'kissmanga.org':      ('h3',  None,                             'a',  'href', '_',        -1),
+			'mangadex.org':       ('a',   {'class': 'text-truncate'},       None, None,   'Ch. | - ',  1),
+			'mangatoon.mobi':     ('div', {'class': 'episode-count'},       None, None,   ' ',         5),
+			'zahard.top':         ('ul',  {'class': 'chapters'},            'a',  'href', '/',        -1),
+			'www.manga-raw.club': ('ul',  {'class': 'chapter-list'},        'a',  'href', '-',        -3)
 		}
-		Map['read-noblesse.com'] = Map['vipmanhwa.com'] = Map['www.webtoon.xyz'] = Map['topmanhwa.net'] = Map['mangatx.com'] = tuple([*Map['wuxiaworld.site'][:-1], -2])
+		Map['readmanganato.com'] = Map['manganato.com']
+		Map['1stkissmanga.com'] = Map['read-noblesse.com'] = Map['vipmanhwa.com'] = Map['www.webtoon.xyz'] = Map['topmanhwa.com'] = Map['topmanhwa.net'] = Map['mangatx.com'] = Map['wuxiaworld.site']
 
 		self.lChs = [(-1, float('-inf'))]
+		if ('Complete' or 'do not check for updates') in self.tags: return
+
 		for num, link in enumerate(self.links):
 			site = link.split('/')[2]
+
+			if site in ('mangadex.org', 'www.youtube.com'): continue
 
 			if site in Map:  # check if site been maped
 				try: link = requests.get(link)  # connecting to the site
@@ -67,9 +63,9 @@ class OBJ():
 					if not link.ok: self.lChs.append((num, -1))  # connection error
 					else:
 						try:  # processing html
-							if Map[site][2] and Map[site][3] is None: link = BeautifulSoup(link.text, 'html.parser').find(Map[site][0], Map[site][1]).contents[0]
+							if (Map[site][2] and Map[site][3]) is None: link = BeautifulSoup(link.text, 'html.parser').find(Map[site][0], Map[site][1]).contents[0]
 							else: link = BeautifulSoup(link.text, 'html.parser').find(Map[site][0], Map[site][1]).find(Map[site][2]).get(Map[site][3])
-						except AttributeError: self.lChs.append((num, -1))
+						except AttributeError: self.lChs.append((num, -3))
 						else: self.lChs.append((num, float(re.split(Map[site][4], link)[Map[site][5]])))
 			else: self.lChs.append((num, -2))  # site is not supported
 
@@ -81,48 +77,21 @@ class author(OBJ): prop, arc = {'name': None, 'links': None, 'works': [], 'score
 class series(OBJ): prop, arc = {'name': None, 'links': None, 'author': None, 'works': [], 'fandom': [], 'score': None, 'tags': []}, {}
 class fanfic(OBJ): prop, arc = {'name': None, 'links': None, 'author': None, 'chapter': 0, 'fandom': [], 'series': None, 'score': None, 'tags': []}, {}
 class anime(OBJ): prop, arc = {'name': None, 'links': None, 'episode': 0, 'series': None, 'score': None, 'tags': []}, {}
-class manga(OBJ): prop, arc = {'name': None, 'links': [], 'chapter': 0, 'score': None, 'tags': []}, {}
-class light_novel(OBJ): prop, arc = {'name': None, 'links': [], 'chapter': 0, 'score': None, 'tags': []}, {}
+class manga(OBJ): prop, arc = {'name': None, 'links': [], 'chapter': 0, 'score': None, 'series': None, 'author': None, 'tags': []}, {}
+class text(OBJ): prop, arc = {'name': None, 'links': [], 'chapter': 0, 'author': None, 'series': None, 'score': None, 'tags': []}, {}
 
 
-score = {'no Good': -1, None: 0, 'ok-': 0.9, 'ok': 1, 'ok+': 1.1, 'Good-': 1.9, 'Good': 2, 'Good+': 2.1, 'Great': 3}
+score = {'no Good': -1, None: 2.9, 'ok-': 0.9, 'ok': 1, 'ok+': 1.1, 'Good-': 1.9, 'Good': 2, 'Good+': 2.1, 'Great': 3}
 
 
-def main(file='', sort_by=score):
-	for mode in cycle(('reading', 'adding')):
-		try:
-			while file == '':
-				file = input('Mode: ' + mode + '\nInput File: ')
-			if not load(file): file = ''
-			else: break
-		except KeyboardInterrupt: pass
-	if mode == 'reading':
-		try: read(sort_by)
-		except KeyboardInterrupt:
-			print('saving ...')
-			save(file)
-	elif mode == 'adding':
-		for Type in cycle((manga, anime, fanfic)):
-			try:
-				while True:
-					print('Format: ' + Type.__name__)
-					args = [input('Name: ')]
-					try:
-						if args[0].lower() in Type.arc:
-							print('Manga all ready exists')
-							continue
-						for prop in Type.prop:
-							if prop == 'name': continue
-							elif Type.prop[prop] == []: args.append(input(prop.title() + ': ').split(','))
-							else: args.append(input(prop.title() + ': '))
-						add(Type, *args)
-					except KeyboardInterrupt: pass
-			except KeyboardInterrupt: save(file)
-
-
-# Each manga/anime/fanfic/etc. are to be refered to as work
-# mangas/animes/fanfics/etc. are to be refered to as obj
-# all works are to be refered to as objs
+def main(file='', sort_by=score, mode='reading'):
+	load()
+	try: read(sort_by)
+	except KeyboardInterrupt:
+		os.system('clear')
+		print('saving ...')
+		save()
+		os.system('clear')
 
 
 def All(*args, sort_by=None):
@@ -138,7 +107,7 @@ def add(format, name, *args, **kwargs):
 	format.arc[name.lower()] = format([name, *args], kwargs)
 
 
-def load(file):
+def load(file='manga'):
 	try:
 		with open(file + '.json', 'r') as file: json.load(file, object_hook=lambda kwargs: add(**kwargs))
 		return True
@@ -148,7 +117,7 @@ def load(file):
 	# except json.decoder.JSONDecodeError: pass
 
 
-def save(file):
+def save(file='manga'):
 	for obj in All():
 		try: delattr(obj, 'lChs')
 		except AttributeError: pass
@@ -158,45 +127,51 @@ def save(file):
 
 def display(objs='all', debug=True, works=None, thread=False, sort_by=None):
 	if works is None: works = All(objs, sort_by=sort_by)
-	if debug:
-		for work in works:
-			print('\t' + work.name + ':')
-			print('\t\t' + 'format:', work.__class__.__name__)
-			for key, value in work.__dict__.items():
-				if key != 'name': print('\t\t' + key + ':', value)
-			print()
 	else:
 		global reading, running
 		if thread:
 			while running: sleep(0.01)
 			running = True
 		toPrint = [None] * len(works)
-		# size = (112, 34)
-		size = (80, 24)
+		try: size = os.get_terminal_size().columns - 26
+		except OSError: size = 120
+			
+		size = 20
+			
 		for num, work in enumerate(works):
-			if not hasattr(work, 'lChs'): toPrint[num] = '{:>3}. {}\n'.format(num, work.name + ':')  # work has not been updated
-			elif work.lChs[0][1] == float('-inf'): toPrint[num] = ''  # has been updated and no link
-			elif work.lChs[0][1] in (-2, -1): toPrint[num] = '{0:>3}. {1:.<{2}.{2}} Connection Error\n'.format(num, work.name + ': ', size[0] - 24)  # terminal is not to small and connection error
+			if not hasattr(work, 'lChs'): toPrint[num] = '{:>3}. {:.{}}\n'.format(num, work.name + ':', size + 19)  # work has not been updated
+			# elif work.lChs[0][1] == float('-inf'): toPrint[num] = ''  # has been updated and no link
+			elif size < 1 and work.lChs[0][1] in (-2, -1): toPrint[num] = '{:>3}. Error\n'.format(num)  # terminal is too small and connection error
+			elif size > 0 and work.lChs[0][1] in (-2, -1): toPrint[num] = '{0:>3}. {1:.<{2}.{2}} Connection Error\n'.format(num, work.name + ': ', size)  # terminal is not to small and connection error
+			elif work.lChs[0][1] == -3: toPrint[num] = '{0:>3}. {1:.<{2}.{2}} Parsing Error\n'.format(num, work.name + ': ', size)
 			elif work.lChs[0][1] - work.chapter <= 0: toPrint[num] = ''  # there are no new updates
-			else: toPrint[num] = '{0:>3}. {1:.<{2}.{2}} {3:0>3g} [{4:0>3g} to {5:0>3g}]\n'.format(num, work.name + ': ', size[0] - 24, work.lChs[0][1] - work.chapter, work.chapter, work.lChs[0][1])  # terminal is not too small and updated
+			elif size < 1: toPrint[num] = '{0:>3}. {1:0>3g}\n'.format(num, work.lChs[0][1] - work.chapter)  # terminal is too small and updated
+			elif size > 0: toPrint[num] = '{0:>3}. {1:.<{2}.{2}} {3:0>3g} [{4:0>3g} to {5:0>3g}]\n'.format(num, work.name + ': ', size, work.lChs[0][1] - work.chapter, work.chapter, work.lChs[0][1])  # terminal is not too small and updated
 		toPrint = tuple(filter(lambda e: e != '', toPrint))
-		print('\n\n', *toPrint[:size[1]], sep='', end='')
-		if thread and reading: print('\nRead To: ', end='')
+		os.system('clear')
+		if len(toPrint) > os.get_terminal_size().lines - 2: print(*toPrint[:os.get_terminal_size().lines - 2], sep='', end='')
+		else: print(*toPrint, sep='', end='')
+		if thread and reading: print('\nRead To{}: '.format(temp_link_var), end='')
 		elif thread: print('\nRead: ', end='')
 		if thread: running = False
 
 
 def read(sort_by=None, objs='works', works=None, Thread=0):
+	global reading, running, temp_link_var
 	if Thread == 0:
-		global reading, running
 		reading, running = False, False
-		# threading.excepthook = lambda e: e
 		works = All(objs, sort_by=sort_by)
 
 		threading.Thread(target=read, kwargs={'works': works, 'Thread': 1}, daemon=True).start()
 		threading.Thread(target=read, kwargs={'works': works, 'Thread': 2}, daemon=True).start()
 
-		threading.enumerate()[-1].join()
+		try: s = os.get_terminal_size().columns
+		except OSError: [t.join() for t in threading.enumerate()]
+		while True:
+			if s != os.get_terminal_size().columns:
+				display(None, False, works, True)
+				s = os.get_terminal_size().columns
+			sleep(0.01)
 	elif Thread == 1:  # the update thread
 		for work in works:
 			work.update()
@@ -218,7 +193,7 @@ def read(sort_by=None, objs='works', works=None, Thread=0):
 			# split the number into work # and link #
 			r, s = map(int, str(r).split('.'))
 
-			try: print(works[r].links[s])  # open website
+			try: temp_link_var = works[r].links  # open website
 			except IndexError: continue
 			reading = True
 			while reading:
@@ -233,10 +208,4 @@ def read(sort_by=None, objs='works', works=None, Thread=0):
 
 
 if __name__ == '__main__':
-	import os
-	print(os.get_terminal_size())
-	# try: main()
-	# except Exception: print(traceback.format_exc())
 	main()
-	exit()
-	# test()

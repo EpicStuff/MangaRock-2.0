@@ -47,44 +47,28 @@
 # 	yaml.dump(settings, file)
 
 
-with open('test.yaml', 'r') as file:
-	tmp = file.readlines()
+with open('test.yaml', 'r') as f:
+	file = f.readlines()
 
+for num, line in enumerate(file):
+	if line[0:6] == 'sites:':
+		start = num
+		break
 
-# for line in tmp:
-# 	print(line, end='')
-# print('------------------')
+i = 0; adding = []; done = []
+while len(done) != len(file[start:]):
+	if len(adding) + len(done) == len(file[start:]):
+		adding = []
+	for num, line in enumerate(file[start:], start):
+		if num in done:
+			continue
+		if line[i] == '\n':
+			done.append(num)
+		elif num in adding:
+			file[num] = line[0:i] + ' ' + line[i:]
+		elif line[i] in (':', ',') and not (line[i + 1] == ' ' and line[i + 2] == '#'):
+			adding.append(num)
+	i += 1
 
-for line in tmp.copy():
-	# print(line[0:5])
-	if line[0:6] != 'sites:': tmp.remove(line)
-	else: break
-
-# for line in tmp:
-# 	print(line, end='')
-# print('------------------')
-
-i = 0
-adding = []
-done = []
-# try:
-if True:
-	while i < 300:
-		if len(adding) + len(done) == len(tmp):
-			adding = []
-		for num, line in enumerate(tmp):
-			if num in done:
-				continue
-			if line[i] == '\n':
-				done.append(num)
-
-			elif num in adding:
-				tmp[num] = line[0:i] + ' ' + line[i:]
-			elif line[i] == ' ' and line[i + 1] != ' ' and not (line[i - 1] == "'" and line[i + 1] == "'"):
-				print(line[i - 1:i + 1])
-				adding.append(num)
-		i += 1
-# except IndexError as e: print(e)
-
-for line in tmp:
-	print(line, end='')
+with open('test.yaml', 'w') as f:
+	f.writelines(file)

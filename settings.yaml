@@ -26,3 +26,39 @@ total_renderers: 1
 webbrowser_executable: C:/Program Files/Google/Chrome/Application/chrome.exe
 webbrowser_arg: --profile-directory="Default" "%l"
 backup_directory: /backup
+# prettier-ignore
+sites:  # site:         find,   with,                       then find, and get,       split at, then get, render?; supported sites, might be outdated
+    'manganato.com': &001 ['ul',    {'class': 'row-content-chapter'}, 'a',  'href',          '-',        -1, False]
+    'www.webtoons.com':   ['ul',    {'id': '_listUl'},                'li', 'id',            '_',        -1, False]
+    'manhuascan.com':     ['div',   {'class': 'list-wrap'},           'a',  'href',          '-',        -1, False]
+    'zahard.xyz':         ['ul',    {'class': 'chapters'},            'a',  'href',          '/',        -1, False]
+    'www.royalroad.com':  ['table', {'id':    'chapters'},            null, 'data-chapters', ' ',         0, False]
+    '1stkissmanga.io':    ['li',    {'class': 'wp-manga-chapter'},    'a',  'href',          '-|/',      -2, False]
+    'comickiba.com':      ['li',    {'class': 'wp-manga-chapter'},    'a',  'href',          '-|/',      -2,  True]
+    'asura.gg':           ['span',  {'class': 'epcur epcurlast'},    null,   null,           ' ',         1, False]
+    'mangapuma.com':      ['div',   {'id': 'chapter-list-inner'},     'a',  'href',           '-',       -1, False]
+    'bato.to':            ['item',  null,                           'title',  null,           ' ',       -1, False]
+    'www.manga-raw.club': ['ul',    {'class': 'chapter-list'},        'a',  'href',           '-|/',     -4, False]
+    'chapmanganato.com': *001
+    'readmanganato.com': *001
+    # 'nitroscans.com': = sites['anshscans.org'] = sites['comickiba.com']
+    # 'www.mcreader.net': = sites['www.manga-raw.club']
+    # 'flamescans.org': = sites['asura.gg']
+sites:  # site:         find,   with,                       then find, and get,       split at, then get, render?; supported sites, might be outdated
+    manganato.com: &001 [ul, class: row-content-chapter, a, href, '-', -1, false]
+    www.webtoons.com: [ul, id: _listUl, li, id, _, -1, false]
+    manhuascan.com: [div, class: list-wrap, a, href, '-', -1, false]
+    zahard.xyz: [ul, class: chapters, a, href, /, -1, false]
+    www.royalroad.com: [table, id: chapters, null, data-chapters, ' ', 0, false]
+    1stkissmanga.io: [li, class: wp-manga-chapter, a, href, -|/, -2, false]
+    comickiba.com: &002 [li, class: wp-manga-chapter, a, href, -|/, -2, true]
+    asura.gg: &004 [span, class: epcur epcurlast, null, null, ' ', 1, false]
+    mangapuma.com: [div, id: chapter-list-inner, a, href, '-', -1, false]
+    bato.to: [item, null, title, null, ' ', -1, false]
+    www.manga-raw.club: &003 [ul, class: chapter-list, a, href, -|/, -4, false]
+    chapmanganato.com: *001
+    readmanganato.com: *001
+    nitroscans.com: *002
+    anshscans.org: *002
+    www.mcreader.net: *003
+    flamescans.org: *004

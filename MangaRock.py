@@ -65,17 +65,21 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 			7. -7 = failed to render link, probably timeout'''
 		import re, bs4
 		sites = {  # site:         find,   with,                       then find, and get,       split at, then get, render?; supported sites, might be outdated
-			'readmanganato.com':  ('ul',    {'class': 'row-content-chapter'}, 'a',  'href',          '-',        -1, False),
+			'manganato.com':      ('ul',    {'class': 'row-content-chapter'}, 'a',  'href',          '-',        -1, False),
 			'www.webtoons.com':   ('ul',    {'id': '_listUl'},                'li', 'id',            '_',        -1, False),
-			'manhuascan.com':     ('div',   {'class': 'list-wrap'},           'a',  'href',          '-|\.',      -2, False),
+			'manhuascan.com':     ('div',   {'class': 'list-wrap'},           'a',  'href',          '-',        -1, False),
 			'zahard.xyz':         ('ul',    {'class': 'chapters'},            'a',  'href',          '/',        -1, False),
 			'www.royalroad.com':  ('table', {'id':    'chapters'},            None, 'data-chapters', ' ',         0, False),
 			'1stkissmanga.io':    ('li',    {'class': 'wp-manga-chapter'},    'a',  'href',          '-|/',      -2, False),
 			'comickiba.com':      ('li',    {'class': 'wp-manga-chapter'},    'a',  'href',          '-|/',      -2,  True),
-			'www.manga-raw.club': ('ul',    {'class': 'chapter-list'},        'a',  'href',          '-',        -3,  True)}
-		sites['manganato.com'] = sites['readmanganato.com']
+			'asura.gg':           ('span',  {'class': 'epcur epcurlast'},    None,   None,           ' ',         1, False),
+			'mangapuma.com':      ('div',   {'id': 'chapter-list-inner'},     'a',  'href',           '-',       -1, False),
+			'bato.to':            ('item',  None,                           'title',  None,           ' ',       -1, False),
+			'www.manga-raw.club': ('ul',    {'class': 'chapter-list'},        'a',  'href',           '-|/',     -4, False)}
+		sites['chapmanganato.com'] = sites['readmanganato.com'] = sites['manganato.com']
 		sites['nitroscans.com'] = sites['anshscans.org'] = sites['comickiba.com']
 		sites['www.mcreader.net'] = sites['www.manga-raw.club']
+		sites['flamescans.org'] = sites['asura.gg']
 
 		self.lChs = []  # latest chapters, format: (link number, latest chapter from that link)
 		try:
@@ -120,20 +124,13 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 		return {**{'format': self.__class__.__name__}, **{key: val for key, val in self.__dict__.items() if val not in ([], "None") if key != 'lChs'}}  # convert attributes to a dictionary
 
 
-class Fandom(Type):
-	prop = {'name': None, 'tags': [], 'children': []}; all = []
-class Author(Type):
-	prop = {'name': None, 'links': [], 'works': [], 'score': None, 'tags': []}; all = []
-class Series(Type):
-	prop = {'name': None, 'links': [], 'author': None, 'works': [], 'fandom': [], 'score': None, 'tags': []}; all = []
-class Manga(Type):
-	prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}; all = []
-class Anime(Type):
-	prop = {'name': None, 'links': [], 'episode': 0, 'series': None, 'score': None, 'tags': []}; all = []
-class Text(Type):
-	prop = {'name': None, 'links': [], 'chapter': 0, 'fandom': None, 'author': None, 'series': None, 'score': None, 'tags': []}; all = []
-class Link(Type):
-	prop = {'name': None, 'site': None}; all = []
+class Fandom(Type): all = []; prop = {'name': None, 'tags': [], 'children': []}
+class Author(Type): all = []; prop = {'name': None, 'links': [], 'works': [], 'score': None, 'tags': []}
+class Series(Type): all = []; prop = {'name': None, 'links': [], 'author': None, 'works': [], 'fandom': [], 'score': None, 'tags': []}
+class Manga(Type):  all = []; prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
+class Anime(Type):  all = []; prop = {'name': None, 'links': [], 'episode': 0, 'series': None, 'score': None, 'tags': []}
+class Text(Type):   all = []; prop = {'name': None, 'links': [], 'chapter': 0, 'fandom': None, 'author': None, 'series': None, 'score': None, 'tags': []}
+class Link(Type):   all = []; prop = {'name': None, 'site': None}
 
 
 def main(null, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml', *args):

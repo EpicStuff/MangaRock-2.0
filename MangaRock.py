@@ -143,12 +143,57 @@ def main(null, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 def load_settings(settings_file: str):
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None  # setup yaml
 	# settings: dict = {}  # change working directory to dir
-	default_settings = {'theme': "awbreezedark", 'font': ("OCR A Extended", 8), 'hide_unupdated_works': True, 'hide_works_with_no_links': True, 'sort_by': "score", 'scores': {'no Good': -1, 'None': 0, 'ok': 1, 'ok+': 1.1, 'decent': 1.5, 'Good': 2, 'Good+': 2.1, 'Great': 3}, 'to_display': {'Manga': {'nChs': 'New Chapters', 'chapter': 'Current Chapter', 'tags': 'Tags'}}, 'default_column_width': 45, 'window_size': (640, 360), 'total_updaters': 3, 'total_renderers': 1, 'webbrowser_executable': 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'webbrowser_arg': '--profile-directory="Default" "%l"', 'backup_directory': '/backup'}  # set default settings
+	default_settings = yaml.load('''
+theme: awbreezedark # options awlight, awdark, awbreeze, awbreezedark
+font: [OCR A Extended, 8] # font name, font size
+hide_unupdated_works: true # testing: comment
+hide_works_with_no_links: true
+sort_by: score
+show_errors: false
+scores:
+    no Good: -1
+    None: 0
+    ok: 1
+    ok+: 1.1
+    decent: 1.5
+    Good: 2
+    Good+: 2.1
+    Great: 3
+to_display:
+    Manga:
+        nChs: New Chapters
+        chapter: Current Chapter
+        tags: Tags
+default_column_width: 45
+window_size: [640, 360]
+total_updaters: 3
+total_renderers: 1
+webbrowser_executable: C:/Program Files/Google/Chrome/Application/chrome.exe
+webbrowser_arg: --profile-directory="Default" "%l"
+backup_directory: /backup
+# prettier-ignore
+sites: #site,           find,        with,                       then_find, and get,       split at, then get, render?
+    manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
+    www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
+    manhuascan.com:     &003 [div,   class: list-wrap,           a,         href,          '-',      -1,       false]
+    zahard.xyz:         &004 [ul,    class: chapters,            a,         href,          /,        -1,       false]
+    www.royalroad.com:  &005 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]
+    1stkissmanga.io:    &006 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       false]
+    comickiba.com:      &007 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       true]
+    asura.gg:           &008 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+    mangapuma.com:      &009 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
+    bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
+    www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+    chapmanganato.com:  *001
+    readmanganato.com:  *001
+    nitroscans.com:     *007
+    anshscans.org:      *007
+    flamescans.org:     *008
+    www.mcreader.net:   *011''')  # set default settings
 	try:
 		with open(settings_file, 'r') as file:
 			settings = yaml.load(file)
-	except FileNotFoundError as e:
-		print(e)
+	except FileNotFoundError as e: print(e)
 	for setting, value in default_settings.items():
 		if setting not in settings:
 			settings[setting] = value

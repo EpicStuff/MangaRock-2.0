@@ -39,37 +39,38 @@
 # sites['flamescans.org'] = sites['asura.gg']
 
 
-# import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None
+import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None
 
-# with open('settings.yaml', 'r') as file:
-# 	settings = yaml.load(file)
+with open('settings.yaml', 'r') as file:
+	settings = yaml.load(file)
 # with open('test.yaml', 'w') as file:
 # 	yaml.dump(settings, file)
 
+input()
 
-with open('test.yaml', 'r') as f:
-	file = f.readlines()
+# with open('test.yaml', 'r') as f:
+# 	file = f.readlines()
 
-for num, line in enumerate(file):
-	if line[0:6] == 'sites:':
-		start = num
-		break
+# for num, line in enumerate(file):
+# 	if line[0:6] == 'sites:':
+# 		start = num
+# 		break
 
-i = 0; adding = []; done = []
-while len(done) != len(file[start:]):
-	if len(adding) + len(done) == len(file[start:]):
-		adding = []
-	for num, line in enumerate(file[start:], start):
-		if num in done:
-			continue
-		if line[i] == '\n':
-			done.append(num)
-		elif num in adding:
-			if line[i + 1] != ' ':
-				file[num] = line[0:i] + ' ' + line[i:]
-		elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*')):
-			adding.append(num)
-	i += 1
+# i = 0; adding = []; done = []
+# while len(done) != len(file[start:]):
+# 	if len(adding) + len(done) == len(file[start:]):
+# 		adding = []
+# 	for num, line in enumerate(file[start:], start):
+# 		if num in done:
+# 			continue
+# 		if line[i] == '\n':
+# 			done.append(num)
+# 		elif num in adding:
+# 			if line[i + 1] != ' ':
+# 				file[num] = line[0:i] + ' ' + line[i:]
+# 		elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*')):
+# 			adding.append(num)
+# 	i += 1
 
-with open('test.yaml', 'w') as f:
-	f.writelines(file)
+# with open('test.yaml', 'w') as f:
+# 	f.writelines(file)

@@ -140,9 +140,9 @@ def main(null, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 	file = gui.mode_loading(settings)
 
 
-def load_settings(settings_file: str):  # setup
+def load_settings(settings_file: str):
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None  # setup yaml
-	settings: dict = {}  # change working directory to dir
+	# settings: dict = {}  # change working directory to dir
 	default_settings = {'theme': "awbreezedark", 'font': ("OCR A Extended", 8), 'hide_unupdated_works': True, 'hide_works_with_no_links': True, 'sort_by': "score", 'scores': {'no Good': -1, 'None': 0, 'ok': 1, 'ok+': 1.1, 'decent': 1.5, 'Good': 2, 'Good+': 2.1, 'Great': 3}, 'to_display': {'Manga': {'nChs': 'New Chapters', 'chapter': 'Current Chapter', 'tags': 'Tags'}}, 'default_column_width': 45, 'window_size': (640, 360), 'total_updaters': 3, 'total_renderers': 1, 'webbrowser_executable': 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'webbrowser_arg': '--profile-directory="Default" "%l"', 'backup_directory': '/backup'}  # set default settings
 	try:
 		with open(settings_file, 'r') as file:
@@ -240,6 +240,15 @@ class GUI():
 			subclass.format()  # connect works to series to authors to fandoms, etc. not yet implemented
 		return file
 
+
+def test():
+	settings = load_settings('settings.yaml')
+	print(settings)
+
+
+if __name__ == '__main__':
+	# main(*sys.argv)
+	test()
 
 # def update_all(works: list | tuple, pipe_enter, settings) -> None:
 # 	'updates all works provided'
@@ -378,5 +387,3 @@ class GUI():
 # 			else: open_url(Works.all[int(tree_input)].links[0])  # else set link to "first" link of selected node
 # 			reading = tree_input; tree_input = tree_input.split('.')[0]; tree.selection_set(tree_input); label['text'] = f'Reading: {Works.all[int(tree_input)].name}'  # set reading to selected node; set tree_input to work even if link was selected; set tree.selection to tree_input; change label
 # 			tree.item(tree_input, open=True); open_node = tree_input  # open record work node
-if __name__ == '__main__':
-	main(*sys.argv)

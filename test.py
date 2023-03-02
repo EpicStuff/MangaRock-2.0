@@ -65,8 +65,9 @@ while len(done) != len(file[start:]):
 		if line[i] == '\n':
 			done.append(num)
 		elif num in adding:
-			file[num] = line[0:i] + ' ' + line[i:]
-		elif line[i] in (':', ',') and not (line[i + 1] == ' ' and line[i + 2] == '#'):
+			if line[i + 1] != ' ':
+				file[num] = line[0:i] + ' ' + line[i:]
+		elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*')):
 			adding.append(num)
 	i += 1
 

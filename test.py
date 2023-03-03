@@ -39,23 +39,20 @@
 # sites['flamescans.org'] = sites['asura.gg']
 
 
-import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None
+# import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None
 
-with open('settings.yaml', 'r') as file:
-	settings = yaml.load(file)
+# with open('settings.yaml', 'r') as file:
+# settings = yaml.load(file)
 # with open('test.yaml', 'w') as file:
 # 	yaml.dump(settings, file)
 
+# input()
+
+with open('test.yaml', 'r') as f:
+	lines = f.readlines()
+
+start = [num for num, line in enumerate(lines) if line[0:6] == 'sites:'][0]
 input()
-
-# with open('test.yaml', 'r') as f:
-# 	file = f.readlines()
-
-# for num, line in enumerate(file):
-# 	if line[0:6] == 'sites:':
-# 		start = num
-# 		break
-
 # i = 0; adding = []; done = []
 # while len(done) != len(file[start:]):
 # 	if len(adding) + len(done) == len(file[start:]):

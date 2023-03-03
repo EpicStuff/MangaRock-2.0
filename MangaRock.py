@@ -140,9 +140,25 @@ def main(null, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 	file = gui.mode_loading(settings)
 
 
-def load_settings(settings_file: str):
+def load_settings(settings_file: str) -> dict:
+	def reorder(settings) -> dict: pass
+	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
+		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
+		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
+		i = 0; adding = set(); done = set()
+		while len(done) != len(file[start:]):  # while not all lines have been formatted
+			if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
+			for num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
+				if num in done: continue  # skip completed lines
+				if line[i] == '\n': done.add(num)  # add line's index to done when it reaches the end
+				elif num in adding and line[i + 1] != ' ': file[num] = line[0:i] + ' ' + line[i:]  # if line is in adding and next char is not ' ' then add space into line at i
+				elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*')): adding.add(num)  # if elm endpoint is reached, add line into adding
+			i += 1  # increase column counter
+
+		with open('test.yaml', 'w') as f:
+			f.writelines(file)
+
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None  # setup yaml
-	# settings: dict = {}  # change working directory to dir
 	default_settings = yaml.load('''
 theme: awbreezedark # options awlight, awdark, awbreeze, awbreezedark
 font: [OCR A Extended, 8] # font name, font size
@@ -197,8 +213,10 @@ sites: #site,           find,        with,                       then_find, and 
 	for setting, value in default_settings.items():
 		if setting not in settings:
 			settings[setting] = value
+	settings = reorder(settings)
 	with open(settings_file, 'w') as file:
 		yaml.dump(settings, file)
+	format_sites(settings_file)
 	return settings
 def load_file(file: str) -> str:
 	'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'

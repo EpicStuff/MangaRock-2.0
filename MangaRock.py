@@ -8,27 +8,19 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 	Custom Book class Example: `class Book(Type): prop, all = {'name': None, 'author': None, 'score': None, 'tags': []}, []`'''
 	prop = {'name': None}; all = []  # prop is short for properties, dict provided by sub object; all = list of all loaded obj/works of this class, eg = incase user wishes to iterate through all books
 
-	def __init__(self, *args, **kwargs) -> None:
+	def __init__(self, *args: list, **kwargs: dict) -> None:
 		'''Applies args and kwargs to `self.__dict__` if kwarg is in `self.prop`'''
-		for num, arg in enumerate(args):  # convert given args into kwargs
-			if arg not in {'', None}:
-				kwargs[tuple(self.prop.keys())[num]] = arg  # if arg is not blank then add arg into kwargs
-		if kwargs['name'] == '':
-			kwargs['name'] = self.__class__.all.__len__  # if no name was provided use number
+		kwargs.update({tuple(self.prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in {'', None, *kwargs.values()}})  # convert args into kwargs and update them to kwargs
+		if kwargs['name'] == '': kwargs['name'] = self.__class__.all.__len__  # if no name was provided use number as name
 		self.__dict__.update(self.prop); Type.all.append(self); self.__class__.all[kwargs['name']] = self  # set self properties to default property values; add self to Works.all; add self to it's class' all dict with name as key
 		for key, val in kwargs.items():  # for every kwarg given
 			if key in self.__dict__:  # if key of kwarg is in properties
-				if type(val) is tuple:
-					val = list(val)  # if given val is a tuple then turn given val into a list
-				if type(val) is list and type(self.prop[key]) is not list:  # if given val is list and default val is not list then
-					if len(val) > 1:
-						raise TypeError('unexpected multiple values within array')  # if multiple items in list then raise error
-					else:
-						val = val[0]  # else unlist list
-				if type(self.prop[key]) is int and type(val) is not float:
-					val = float(val)  # if default val is float and given val is not float then float given val
-				if type(self.prop[key]) is list and type(val) is not list:
-					val = [val]  # if default val is list and given val is not list then put given val in a list
+				if val.__class__ is tuple: val = list(val)  # if given val is a tuple then turn given val into a list
+				if val.__class__ is list and type(self.prop[key]) is not list:  # if given val is list and default val is not list then
+					if val.__len__ > 1: raise TypeError('unexpected multiple values within array')  # if multiple items in list then raise error
+					else: val = val[0]  # else unlist list
+				elif self.prop[key].__class__ is list and val.__class__ is not list: val = [val]  # if default val is list and given val is not list then put given val in a list
+				if self.prop[key].__class__ is int and val.__class__ is not float: val = float(val)  # if default val is float and given val is not float then float given val
 				self.__dict__.update({key: val})  # change self property value to given kwarg value
 
 	@classmethod
@@ -53,8 +45,8 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 						prop[num] = eval(obj)
 					except Exception as e: print('Type.format:', e)
 
-	async def update(self, session) -> list:
-		''' Finds latest chapter from `self.links` then appends result to `self.lChs` as a tuple pair containing link index and latest chapter or an error code
+	async def update(self, session, sites: dict) -> list:
+		''' Finds latest chapter from `name` then appends result or an error code to `chs`
 		# Error Codes:
 			1. -1 = parsing error
 			2. -2 = link not supported
@@ -64,64 +56,31 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 			6. -6 = update purposefully skiped
 			7. -7 = failed to render link, probably timeout'''
 		import re, bs4
-		sites = {  # site:         find,   with,                       then find, and get,       split at, then get, render?; supported sites, might be outdated
-			'manganato.com':      ('ul',    {'class': 'row-content-chapter'}, 'a',  'href',          '-',        -1, False),
-			'www.webtoons.com':   ('ul',    {'id': '_listUl'},                'li', 'id',            '_',        -1, False),
-			'manhuascan.com':     ('div',   {'class': 'list-wrap'},           'a',  'href',          '-',        -1, False),
-			'zahard.xyz':         ('ul',    {'class': 'chapters'},            'a',  'href',          '/',        -1, False),
-			'www.royalroad.com':  ('table', {'id':    'chapters'},            None, 'data-chapters', ' ',         0, False),
-			'1stkissmanga.io':    ('li',    {'class': 'wp-manga-chapter'},    'a',  'href',          '-|/',      -2, False),
-			'comickiba.com':      ('li',    {'class': 'wp-manga-chapter'},    'a',  'href',          '-|/',      -2,  True),
-			'asura.gg':           ('span',  {'class': 'epcur epcurlast'},    None,   None,           ' ',         1, False),
-			'mangapuma.com':      ('div',   {'id': 'chapter-list-inner'},     'a',  'href',           '-',       -1, False),
-			'bato.to':            ('item',  None,                           'title',  None,           ' ',       -1, False),
-			'www.manga-raw.club': ('ul',    {'class': 'chapter-list'},        'a',  'href',           '-|/',     -4, False)}
-		sites['chapmanganato.com'] = sites['readmanganato.com'] = sites['manganato.com']
-		sites['nitroscans.com'] = sites['anshscans.org'] = sites['comickiba.com']
-		sites['www.mcreader.net'] = sites['www.manga-raw.club']
-		sites['flamescans.org'] = sites['asura.gg']
 
-		self.lChs = []  # latest chapters, format: (link number, latest chapter from that link)
+		if self.site not in sites: self.chs = -2; return  # if site not is supported, set error code, return
+		try: link = await session.get(link)  # connecting to the site
+		except Exception as e: self.chs = -4; self.error = e; return  # connection error
 		try:
-			if self.links == []: raise TypeError  # if no links
-		except TypeError as e: self.lChs.append((-1, -5, e)); return self.lChs  # then return -5 error "code"
-		try:
-			if ('do not check for updates' in self.tags) or ('Complete' in self.tags and 'Read' in self.tags) or ('Complete' in self.tags and 'Oneshot' in self.tags): self.lChs.append((-1, -6)); return self.lChs
-		except TypeError as e: print(e)  # then pass
-
-		for num, link in enumerate(self.links):  # for each link
-			site = link.split('/')[2]
-
-			if site in sites:  # if site is supported
-				try: link = await session.get(link)  # connecting to the site
-				except Exception as e: self.lChs.append((num, -4, e))  # connection error
-				else:
-					try:
-						if sites[site][6]:  # if needs to be rendered
-							if __debug__: print('rendering', self.name, '-', site)
-							await link.html.arender(retries=2, wait=1, sleep=2, timeout=20, reload=True)
-							if __debug__: print('done rendering', self.name, '-', site)
-					except Exception as e: print('failed to render: ', self.name, ' - ', site, ', ', e, sep=''); self.lChs.append((num, -7, e))
-					else:
-						try:
-							link = bs4.BeautifulSoup(link.html.html, 'html.parser')  # link = bs4 object with link html
-							if (sites[site][2] is None) and (sites[site][3] is None): link = link.find(sites[site][0], sites[site][1]).contents[0]  # if site does not require second find and the contents are desired: get contents of first tag with specified requirements
-							elif sites[site][2] is None: link = link.find(sites[site][0], sites[site][1]).get(sites[site][3])  # if site does not require second find and tag attribute is desired: get specified attribute of first tag with specified attribute
-							else: link = link.find(sites[site][0], sites[site][1]).find(sites[site][2]).get(sites[site][3])  # else: get specified attribute of first specified tag under the first tag with specified attribute
-						except AttributeError: self.lChs.append((num, -1))  # else there was a parsing error: append link index with error code to lChs
-						else: self.lChs.append((num, float(re.split(sites[site][4], link)[sites[site][5]])))  # else link parsing went fine: extract latest chapter from link using lookup table
-			else: self.lChs.append((num, -2))  # else: site is not supported, append link index with error code to lChs
+			if sites[self.site][6]:  # if needs to be rendered
+				if __debug__: print('rendering', self.name, '-', self.site)
+				await link.html.arender(retries=2, wait=1, sleep=2, timeout=20, reload=True)
+				if __debug__: print('done rendering', self.name, '-', self.site)
+		except Exception as e: print('failed to render: ', self.name, ' - ', self.site, ', ', e, sep=''); self.lChs.append((num, -7, e))
+		else:
+			try:
+				link = bs4.BeautifulSoup(link.html.html, 'html.parser')  # link = bs4 object with link html
+				if (sites[self.site][2] is None) and (sites[self.site][3] is None): link = link.find(sites[self.site][0], sites[self.site][1]).contents[0]  # if site does not require second find and the contents are desired: get contents of first tag with specified requirements
+				elif sites[self.site][2] is None: link = link.find(sites[self.site][0], sites[self.site][1]).get(sites[self.site][3])  # if site does not require second find and tag attribute is desired: get specified attribute of first tag with specified attribute
+				else: link = link.find(sites[self.site][0], sites[self.site][1]).find(sites[self.site][2]).get(sites[self.site][3])  # else: get specified attribute of first specified tag under the first tag with specified attribute
+			except AttributeError: self.chs = -1  # else there was a parsing error: append link index with error code to lChs
+			else: self.chs = float(re.split(sites[self.site][4], link)[sites[self.site][5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 
 		self.lChs.sort(key=lambda lChs: lChs[1], reverse=True)  # sort latest chapters based on lastest chapter
 		return self.lChs
-	def __iter__(self) -> object:
-		return self  # required for to iter over
-	def __str__(self) -> str:
-		return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'  # returns self in str format
-	def __repr__(self) -> str:
-		return f'<{self.name}>'  # represent self as self.name between <>
-	def asdict(self) -> dict:
-		return {**{'format': self.__class__.__name__}, **{key: val for key, val in self.__dict__.items() if val not in ([], "None") if key != 'lChs'}}  # convert attributes to a dictionary
+	def __iter__(self) -> object: return self  # required for to iter over
+	def __str__(self) -> str: return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'  # returns self in str format
+	def __repr__(self) -> str: return f'<{self.name}>'  # represent self as self.name between <>
+	# def asdict(self) -> dict: return {**{'format': self.__class__.__name__}, **{key: val for key, val in self.__dict__.items() if val not in ([], "None") if key != 'lChs'}}  # convert attributes to a dictionary
 
 
 class Fandom(Type): all = []; prop = {'name': None, 'tags': [], 'children': []}
@@ -133,31 +92,7 @@ class Text(Type):   all = []; prop = {'name': None, 'links': [], 'chapter': 0, '
 class Link(Type):   all = []; prop = {'name': None, 'site': None}
 
 
-def main(null, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml', *args):
-	del null; os.chdir(dir)
-	settings = load_settings(settings_file)
-	gui = GUI(settings, dir)
-	file = gui.mode_loading(settings)
-
-
-def load_settings(settings_file: str, settings={}) -> dict:
-	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
-		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
-		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
-		i = 0; adding = set(); done = set()
-		while len(done) != len(file[start:]):  # while not all lines have been formatted
-			if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
-			for num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
-				if line[0:9] == '    null:': done.add(num)
-				if num in done: continue  # skip completed lines
-				if line[i] == '\n': done.add(num)  # add line's index to done when it reaches the end
-				elif num in adding and line[i + 1] != ' ': file[num] = line[0:i] + ' ' + line[i:]  # if line is in adding and next char is not ' ' then add space into line at i
-				elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(num)  # if elm endpoint is reached, add line into adding
-			i += 1  # increase column counter
-		with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
-
-	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
-	settings = yaml.load('''
+default_settings = '''
 theme: awbreezedark # options: awlight, awdark, awbreeze, awbreezedark,, default: awbreezedark
 font: [OCR A Extended, 8] # [font name, font size], default: [OCR A Extended, 8]
 hide_unupdated_works: true # default: true
@@ -167,7 +102,9 @@ sort_by: score # defulat: score
 show_errors: false # default: false
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
-to_display: {Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}} # culumns to display for each Type
+to_display: # culumns to display for each Type
+    Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
+    Text:  {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
 default_column_width: 45 # default: 45
 window_size: [640, 360] # default: [640, 360]
 webbrowser_executable: C:/Program Files/Google/Chrome/Application/chrome.exe # default: C:/Program Files/Google/Chrome/Application/chrome.exe
@@ -192,7 +129,33 @@ sites: #site,           find,        with,                       then_find, and 
     nitroscans.com:     *007
     anshscans.org:      *007
     flamescans.org:     *008
-    www.mcreader.net:   *011''')  # set default_settings
+    www.mcreader.net:   *011'''
+
+def main(null, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml', *args):
+	del null; os.chdir(dir)
+	settings = load_settings(settings_file, default_settings)
+	gui = GUI(settings, dir)
+	file = gui.mode_loading(settings)
+
+
+def load_settings(settings_file: str, default_settings: str) -> dict:
+	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
+		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
+		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
+		i = 0; adding = set(); done = set()
+		while len(done) != len(file[start:]):  # while not all lines have been formatted
+			if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
+			for num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
+				if line[0:9] == '    null:': done.add(num)
+				if num in done: continue  # skip completed lines
+				if line[i] == '\n': done.add(num)  # add line's index to done when it reaches the end
+				elif num in adding and line[i + 1] != ' ': file[num] = line[0:i] + ' ' + line[i:]  # if line is in adding and next char is not ' ' then add space into line at i
+				elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(num)  # if elm endpoint is reached, add line into adding
+			i += 1  # increase column counter
+		with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
+
+	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
+	settings = yaml.load(default_settings)  # set default_settings
 	try: file = open(settings_file, 'r'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
 	except FileNotFoundError as e: print(e)  # except: print error
 	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
@@ -289,22 +252,29 @@ def test():
 
 
 if __name__ == '__main__':
-	# main(*sys.argv)
-	test()
+	main(*sys.argv)
+	# test()
 
-# def update_all(works: list | tuple, pipe_enter, settings) -> None:
-# 	'updates all works provided'
-# 	import asyncio
-# 	from requests_html import AsyncHTMLSession
-# 	updaters, renderers = asyncio.Semaphore(settings['total_updaters']), asyncio.Semaphore(settings['total_renderers'])
+def update_all(works: list | tuple, pipe_enter, settings) -> None:
+	'updates all works provided'
+	import asyncio
+	from requests_html import AsyncHTMLSession
+	updaters, renderers = asyncio.Semaphore(settings['total_updaters']), asyncio.Semaphore(settings['total_renderers'])
 
-# 	async def update_each(num, work, session):
-# 		async with updaters:
-# 			pipe_enter.send((num, await work.update(session, renderers)))
+	async def update_each(num, work, session):
+		async with updaters:
+			pipe_enter.send((num, await work.update(session, renderers)))
 
-# 	async def a_main(): session = AsyncHTMLSession(); await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
+	async def a_main(): session = AsyncHTMLSession(); await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
 
-# 	asyncio.run(a_main())
+	asyncio.run(a_main())
+
+	# try:
+	# 	if self.links == []: raise TypeError  # if no links
+	# except TypeError as e: self.lChs.append((-1, -5, e)); return self.lChs  # then return -5 error "code"
+	# try:
+	# 	if ('do not check for updates' in self.tags) or ('Complete' in self.tags and 'Read' in self.tags) or ('Complete' in self.tags and 'Oneshot' in self.tags): self.lChs.append((-1, -6)); return self.lChs
+	# except TypeError as e: print(e)  # then pass
 
 
 # import json, itertools, subprocess; from multiprocessing import Process, Pipe

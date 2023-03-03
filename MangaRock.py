@@ -140,8 +140,8 @@ def main(null, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 	file = gui.mode_loading(settings)
 
 
-def load_settings(settings_file: str) -> dict:
-	def reorder(settings) -> dict: pass
+def load_settings(settings_file: str, settings={}) -> dict:
+	def reorder(settings) -> dict: return settings
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
 		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
@@ -149,44 +149,31 @@ def load_settings(settings_file: str) -> dict:
 		while len(done) != len(file[start:]):  # while not all lines have been formatted
 			if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
 			for num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
+				if line[0:9] == '    null:': done.add(num)
 				if num in done: continue  # skip completed lines
 				if line[i] == '\n': done.add(num)  # add line's index to done when it reaches the end
 				elif num in adding and line[i + 1] != ' ': file[num] = line[0:i] + ' ' + line[i:]  # if line is in adding and next char is not ' ' then add space into line at i
-				elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*')): adding.add(num)  # if elm endpoint is reached, add line into adding
+				elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(num)  # if elm endpoint is reached, add line into adding
 			i += 1  # increase column counter
+		with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
 
-		with open('test.yaml', 'w') as f:
-			f.writelines(file)
-
-	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None  # setup yaml
+	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
 	default_settings = yaml.load('''
-theme: awbreezedark # options awlight, awdark, awbreeze, awbreezedark
-font: [OCR A Extended, 8] # font name, font size
-hide_unupdated_works: true # testing: comment
-hide_works_with_no_links: true
-sort_by: score
-show_errors: false
-scores:
-    no Good: -1
-    None: 0
-    ok: 1
-    ok+: 1.1
-    decent: 1.5
-    Good: 2
-    Good+: 2.1
-    Great: 3
-to_display:
-    Manga:
-        nChs: New Chapters
-        chapter: Current Chapter
-        tags: Tags
-default_column_width: 45
-window_size: [640, 360]
-total_updaters: 3
-total_renderers: 1
-webbrowser_executable: C:/Program Files/Google/Chrome/Application/chrome.exe
-webbrowser_arg: --profile-directory="Default" "%l"
-backup_directory: /backup
+theme: awbreezedark # options: awlight, awdark, awbreeze, awbreezedark,, default: awbreezedark
+font: [OCR A Extended, 8] # [font name, font size], default: [OCR A Extended, 8]
+hide_unupdated_works: true # default: true
+hide_works_with_no_links: true # default: true
+sort_by: score # defulat: score
+# unimplemented
+show_errors: false # default: false
+# prettier-ignore
+scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
+to_display: {Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}} # culumns to display for each Type
+default_column_width: 45 # default: 45
+window_size: [640, 360] # default: [640, 360]
+webbrowser_executable: C:/Program Files/Google/Chrome/Application/chrome.exe # default: C:/Program Files/Google/Chrome/Application/chrome.exe
+webbrowser_arg: --profile-directory="Default" "%l" # default: -profile-directory="Default" "%l"
+backup_directory: /backup # where to store backups for files, default: /backup
 # prettier-ignore
 sites: #site,           find,        with,                       then_find, and get,       split at, then get, render?
     manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
@@ -200,23 +187,19 @@ sites: #site,           find,        with,                       then_find, and 
     mangapuma.com:      &009 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
     bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
     www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011] # for formatting reasons
     chapmanganato.com:  *001
     readmanganato.com:  *001
     nitroscans.com:     *007
     anshscans.org:      *007
     flamescans.org:     *008
-    www.mcreader.net:   *011''')  # set default settings
-	try:
-		with open(settings_file, 'r') as file:
-			settings = yaml.load(file)
-	except FileNotFoundError as e: print(e)
-	for setting, value in default_settings.items():
-		if setting not in settings:
-			settings[setting] = value
-	settings = reorder(settings)
-	with open(settings_file, 'w') as file:
-		yaml.dump(settings, file)
-	format_sites(settings_file)
+    www.mcreader.net:   *011''')  # set default_settings
+	try: file = open(settings_file, 'r'); settings = yaml.load(file); file.close()  # try to load settings_file to settings
+	except FileNotFoundError as e: print(e)  # except: print error
+	if type(settings) in (dict, ruamel.yaml.comments.CommentedMap): default_settings.update(settings)  # overwrite default settings with settings and set it to settings
+	settings = reorder(default_settings)  # reorder settings
+	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
+	format_sites(settings_file)  # format settings_file 'sites:' part
 	return settings
 def load_file(file: str) -> str:
 	'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
@@ -306,7 +289,7 @@ class GUI():
 
 def test():
 	settings = load_settings('settings.yaml')
-	print(settings)
+	print(settings['scores']['None'])
 
 
 if __name__ == '__main__':

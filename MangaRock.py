@@ -1,11 +1,11 @@
 # Version: 3.3.1
 # okay, heres the plan, make links its own separate object and have the links update individualy. when the updates, it will then update its parent's display
-import os, sys
+import os, sys, inspect
 
 
 class Type():  # type represents the type of object things are, eg: authors, books, website, ...
 	''' Base Type class to be inherited by subclasses to give custom properties\n
-	Custom Book class Example: `class Book(Type): prop, all = {'name': None, 'author': None, 'score': None, 'tags': []}, []`'''
+	Custom Book class Example: `class Book(Type): all = {}; prop = {'name': None, 'author': None, 'score': None, 'tags': []}`'''
 	prop = {'name': None}; all = []  # prop is short for properties, dict provided by sub object; all = list of all loaded obj/works of this class, eg = incase user wishes to iterate through all books
 
 	def __init__(self, *args: list, **kwargs: dict) -> None:
@@ -45,34 +45,31 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 						prop[num] = eval(obj)
 					except Exception as e: print('Type.format:', e)
 
-	async def update(self, session, sites: dict) -> list:
+	async def update(self, session, sites: dict) -> int | Exception:
 		''' Finds latest chapter from `name` then appends result or an error code to `chs`
 		# Error Codes:
-			1. -1 = parsing error
-			2. -2 = link not supported
-			3. -3 = site probably does not support scraping
-			4. -4 = Connection Error
-			5. -5 = no links
-			6. -6 = update purposefully skiped
-			7. -7 = failed to render link, probably timeout'''
+			1. -1 = site not supported
+			2. -2 = Connection Error
+			3. -3 = failed to render link, probably timeout
+			4. -4 = parsing error'''
 		import re, bs4
 
-		if self.site not in sites: self.chs = -2; return  # if site not is supported, set error code, return
+		if self.site not in sites: self.chs = -1; return  # if site not is supported, set error code, return
 		try: link = await session.get(link)  # connecting to the site
-		except Exception as e: self.chs = -4; self.error = e; return  # connection error
+		except Exception as e: self.chs = -4; return e  # connection error
 		try:
 			if sites[self.site][6]:  # if needs to be rendered
 				if __debug__: print('rendering', self.name, '-', self.site)
 				await link.html.arender(retries=2, wait=1, sleep=2, timeout=20, reload=True)
 				if __debug__: print('done rendering', self.name, '-', self.site)
-		except Exception as e: print('failed to render: ', self.name, ' - ', self.site, ', ', e, sep=''); self.lChs.append((num, -7, e))
+		except Exception as e: print('failed to render: ', self.name, ' - ', self.site, ', ', e, sep=''); self.chs = -7; return e
 		else:
 			try:
 				link = bs4.BeautifulSoup(link.html.html, 'html.parser')  # link = bs4 object with link html
 				if (sites[self.site][2] is None) and (sites[self.site][3] is None): link = link.find(sites[self.site][0], sites[self.site][1]).contents[0]  # if site does not require second find and the contents are desired: get contents of first tag with specified requirements
 				elif sites[self.site][2] is None: link = link.find(sites[self.site][0], sites[self.site][1]).get(sites[self.site][3])  # if site does not require second find and tag attribute is desired: get specified attribute of first tag with specified attribute
 				else: link = link.find(sites[self.site][0], sites[self.site][1]).find(sites[self.site][2]).get(sites[self.site][3])  # else: get specified attribute of first specified tag under the first tag with specified attribute
-			except AttributeError: self.chs = -1  # else there was a parsing error: append link index with error code to lChs
+			except AttributeError as e: self.chs = -1; return e  # else there was a parsing error: append link index with error code to lChs
 			else: self.chs = float(re.split(sites[self.site][4], link)[sites[self.site][5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 
 		self.lChs.sort(key=lambda lChs: lChs[1], reverse=True)  # sort latest chapters based on lastest chapter
@@ -80,7 +77,6 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 	def __iter__(self) -> object: return self  # required for to iter over
 	def __str__(self) -> str: return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'  # returns self in str format
 	def __repr__(self) -> str: return f'<{self.name}>'  # represent self as self.name between <>
-	# def asdict(self) -> dict: return {**{'format': self.__class__.__name__}, **{key: val for key, val in self.__dict__.items() if val not in ([], "None") if key != 'lChs'}}  # convert attributes to a dictionary
 
 
 class Fandom(Type): all = []; prop = {'name': None, 'tags': [], 'children': []}
@@ -93,7 +89,7 @@ class Link(Type):   all = []; prop = {'name': None, 'site': None}
 
 
 default_settings = '''
-theme: awbreezedark # options: awlight, awdark, awbreeze, awbreezedark,, default: awbreezedark
+themes: [awbreezedark, awbreeze] # options: awlight, awdark, awbreeze, awbreezedark,, list of themes to use in order of priority
 font: [OCR A Extended, 8] # [font name, font size], default: [OCR A Extended, 8]
 hide_unupdated_works: true # default: true
 hide_works_with_no_links: true # default: true
@@ -173,7 +169,7 @@ def load_file(file: str) -> str:
 
 
 class GUI():
-	def __init__(self, settings, dir) -> None:
+	def __init__(self, settings: dict, dir: str) -> None:
 		import tkinter as tk; from tkinter import ttk
 		def root_quit(self, e: tk.Event) -> None:  # called when <enter> or <Double-1>
 			def execute(entry_input=None) -> None:
@@ -212,20 +208,19 @@ class GUI():
 					self.tree.item(self.open_node, open=False)  # close previous open node
 				self.open_node = node  # record the new open node
 
-		self.root = tk.Tk(); self.stringVar = tk.StringVar(); self.label = ttk.Label(self.root, justify='left', text='Mode: Reading'); self.tree = ttk.Treeview(self.root, selectmode='browse'); self.scroll = ttk.Scrollbar(self.root, orient="vertical", command=self.tree.yview); self.entry = ttk.Entry(self.root, textvariable=self.stringVar, font=settings['font']); self.button = ttk.Button(self.root, width=1); self.style = ttk.Style(self.root)  # setup GUI variables
+		self.root = tk.Tk(); self.input = tk.StringVar(); self.label = ttk.Label(self.root, justify='left', text='Choose File'); self.tree = ttk.Treeview(self.root, selectmode='browse'); self.scroll = ttk.Scrollbar(self.root, orient="vertical", command=self.tree.yview); self.entry = ttk.Entry(self.root, textvariable=self.input, font=settings['font']); self.button = ttk.Button(self.root, width=1); self.style = ttk.Style(self.root); self.open_node = ''  # setup GUI variables
 		self.label.grid(row=0, column=0, columnspan=2, sticky='nesw'); self.tree.grid(row=1, column=0, columnspan=2, sticky='nesw'); self.scroll.grid(row=1, column=1, columnspan=1, sticky='nesw'); self.entry.grid(row=2, column=0, sticky='nesw'); self.button.grid(row=2, column=1)  # pack elements onto root
 		self.root.title(__file__.split('\\')[-1].rstrip('.py')); self.root.columnconfigure(0, weight=1); self.root.columnconfigure(1, weight=0); self.root.rowconfigure(1, weight=1); self.root.geometry('{}x{}'.format(settings['window_size'][0], settings['window_size'][1]))  # configure root
 		self.tree.bind('<Double-1>', lambda e: root_quit(self, e)); self.tree.bind('<Return>', lambda e: root_quit(self, e)); self.tree.bind('<<TreeviewOpen>>', tree_open); self.tree.configure(yscrollcommand=self.scroll.set); self.entry.bind('<Return>', lambda e: root_quit(self, e)); self.entry.focus_set()  # bind events to tree and entry; configure scrollbar to tree
-		try:
-			self.root.tk.eval(f'''package ifneeded tksvg 0.7 [list load [file join {dir + '/tksvg0.7'} tksvg07t.dll] tksvg]'''); self.root.tk.call('lappend', 'auto_path', dir + '/awthemes-10.3.0'); self.root.tk.call('package', 'require', settings['theme']); self.style.theme_use(settings['theme'])  # do style witchery to import tk theme, no idea what it actually does, found it somewhere online
-		except tk.TclError as e:
-			print('Could not load theme -', e)  # if style loading fails, print error and continue
+		self.root.tk.eval(f'''package ifneeded tksvg 0.7 [list load [file join {dir + '/tksvg0.7'} tksvg07t.dll] tksvg]'''); self.root.tk.call('lappend', 'auto_path', dir + '/awthemes-10.3.0')  # do tk style witchery part 1, no idea what it actually does, found it somewhere online
+		for theme in settings['themes']:  # for each theme in settings
+			try: self.root.tk.call('package', 'require', theme); self.style.theme_use(theme)  # do style witchery part 2 to import tk theme
+			except tk.TclError as e: print('Could not load theme', e)  # if style loading fails, print error
+			else: break  # if style loading does not fail, stop from loading other themes
 		self.style.configure('Treeview', rowheight=settings['font'][1] * 2, font=settings['font']); self.style.configure('Treeview.Item', indicatorsize=0, font=settings['font']); self.style.configure('Treeview.Heading', font=settings['font']); self.style.configure('TLabel', font=settings['font'])  # configure treeview and style fonts
-
-		self.open_node = ''
 	def mode_loading(self, settings) -> None:
-		import tkinter as tk; import itertools; mode = itertools.cycle(('Adding', 'Settings', 'Reading'))
-		self.tree.heading('#0', text='File:', anchor='w'); self.button['command'] = lambda: self.label.configure(text='Mode: ' + mode.__next__())  # configure tree; configure button to cycle modes when pressed
+		import tkinter as tk
+		self.tree.heading('#0', text='File:', anchor='w'); self.button['command'] = lambda: print('button pressed, line:', inspect.currentframe().f_lineno)  # configure tree
 		for num, file in enumerate([file for file in os.listdir() if file[-5:] == '.json']):
 			self.tree.insert('', 'end', f'{num}.', text=f'{num}. ' + file.split('.json')[0])  # insert files to tree
 		while not Type.all:  # while no works are loaded
@@ -255,26 +250,26 @@ if __name__ == '__main__':
 	main(*sys.argv)
 	# test()
 
-def update_all(works: list | tuple, pipe_enter, settings) -> None:
-	'updates all works provided'
-	import asyncio
-	from requests_html import AsyncHTMLSession
-	updaters, renderers = asyncio.Semaphore(settings['total_updaters']), asyncio.Semaphore(settings['total_renderers'])
+# def update_all(works: list | tuple, pipe_enter, settings) -> None:
+# 	'updates all works provided'
+# 	import asyncio
+# 	from requests_html import AsyncHTMLSession
+# 	updaters, renderers = asyncio.Semaphore(settings['total_updaters']), asyncio.Semaphore(settings['total_renderers'])
 
-	async def update_each(num, work, session):
-		async with updaters:
-			pipe_enter.send((num, await work.update(session, renderers)))
+# 	async def update_each(num, work, session):
+# 		async with updaters:
+# 			pipe_enter.send((num, await work.update(session, renderers)))
 
-	async def a_main(): session = AsyncHTMLSession(); await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
+# 	async def a_main(): session = AsyncHTMLSession(); await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
 
-	asyncio.run(a_main())
+# 	asyncio.run(a_main())
 
-	# try:
-	# 	if self.links == []: raise TypeError  # if no links
-	# except TypeError as e: self.lChs.append((-1, -5, e)); return self.lChs  # then return -5 error "code"
-	# try:
-	# 	if ('do not check for updates' in self.tags) or ('Complete' in self.tags and 'Read' in self.tags) or ('Complete' in self.tags and 'Oneshot' in self.tags): self.lChs.append((-1, -6)); return self.lChs
-	# except TypeError as e: print(e)  # then pass
+# 	# try:
+# 	# 	if self.links == []: raise TypeError  # if no links
+# 	# except TypeError as e: self.lChs.append((-1, -5, e)); return self.lChs  # then return -5 error "code"
+# 	# try:
+# 	# 	if ('do not check for updates' in self.tags) or ('Complete' in self.tags and 'Read' in self.tags) or ('Complete' in self.tags and 'Oneshot' in self.tags): self.lChs.append((-1, -6)); return self.lChs
+# 	# except TypeError as e: print(e)  # then pass
 
 
 # import json, itertools, subprocess; from multiprocessing import Process, Pipe

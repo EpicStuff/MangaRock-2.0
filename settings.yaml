@@ -7,9 +7,7 @@ sort_by: score # defulat: score
 show_errors: false # default: false
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
-to_display: {
-        Manga: { nChs: New Chapters, chapter: Current Chapter, tags: Tags },
-    } # culumns to display for each Type
+to_display: {Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}} # culumns to display for each Type
 default_column_width: 45 # default: 45
 window_size: [640, 360] # default: [640, 360]
 webbrowser_executable: C:/Program Files/Google/Chrome/Application/chrome.exe # default: C:/Program Files/Google/Chrome/Application/chrome.exe

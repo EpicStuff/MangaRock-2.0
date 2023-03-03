@@ -141,7 +141,6 @@ def main(null, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 
 
 def load_settings(settings_file: str, settings={}) -> dict:
-	def reorder(settings) -> dict: return settings
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
 		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
@@ -158,7 +157,7 @@ def load_settings(settings_file: str, settings={}) -> dict:
 		with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
 
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
-	default_settings = yaml.load('''
+	settings = yaml.load('''
 theme: awbreezedark # options: awlight, awdark, awbreeze, awbreezedark,, default: awbreezedark
 font: [OCR A Extended, 8] # [font name, font size], default: [OCR A Extended, 8]
 hide_unupdated_works: true # default: true
@@ -194,13 +193,10 @@ sites: #site,           find,        with,                       then_find, and 
     anshscans.org:      *007
     flamescans.org:     *008
     www.mcreader.net:   *011''')  # set default_settings
-	try: file = open(settings_file, 'r'); settings = yaml.load(file); file.close()  # try to load settings_file to settings
+	try: file = open(settings_file, 'r'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
 	except FileNotFoundError as e: print(e)  # except: print error
-	if type(settings) in (dict, ruamel.yaml.comments.CommentedMap): default_settings.update(settings)  # overwrite default settings with settings and set it to settings
-	settings = reorder(default_settings)  # reorder settings
 	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
-	format_sites(settings_file)  # format settings_file 'sites:' part
-	return settings
+	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
 def load_file(file: str) -> str:
 	'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 	import json

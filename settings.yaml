@@ -1,4 +1,4 @@
-theme: awbreezedark # options: awlight, awdark, awbreeze, awbreezedark,, default: awbreezedark
+themes: [awbreezedark, awbreeze] # options: awlight, awdark, awbreeze, awbreezedark,, list of themes to use in order of priority
 font: [OCR A Extended, 8] # [font name, font size], default: [OCR A Extended, 8]
 hide_unupdated_works: true # default: true
 hide_works_with_no_links: true # default: true

@@ -79,13 +79,13 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 	def __repr__(self) -> str: return f'<{self.name}>'  # represent self as self.name between <>
 
 
-class Fandom(Type): all = []; prop = {'name': None, 'tags': [], 'children': []}
-class Author(Type): all = []; prop = {'name': None, 'links': [], 'works': [], 'score': None, 'tags': []}
-class Series(Type): all = []; prop = {'name': None, 'links': [], 'author': None, 'works': [], 'fandom': [], 'score': None, 'tags': []}
-class Manga(Type):  all = []; prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
-class Anime(Type):  all = []; prop = {'name': None, 'links': [], 'episode': 0, 'series': None, 'score': None, 'tags': []}
-class Text(Type):   all = []; prop = {'name': None, 'links': [], 'chapter': 0, 'fandom': None, 'author': None, 'series': None, 'score': None, 'tags': []}
-class Link(Type):   all = []; prop = {'name': None, 'site': None}
+class Fandom(Type): all = {}; prop = {'name': None, 'tags': [], 'children': []}
+class Author(Type): all = {}; prop = {'name': None, 'links': [], 'works': [], 'score': None, 'tags': []}
+class Series(Type): all = {}; prop = {'name': None, 'links': [], 'author': None, 'works': [], 'fandom': [], 'score': None, 'tags': []}
+class Manga(Type):  all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
+class Anime(Type):  all = {}; prop = {'name': None, 'links': [], 'episode': 0, 'series': None, 'score': None, 'tags': []}
+class Text(Type):   all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'fandom': None, 'author': None, 'series': None, 'score': None, 'tags': []}
+class Link(Type):   all = {}; prop = {'name': None, 'site': None}
 
 
 default_settings = '''
@@ -220,9 +220,10 @@ class GUI():
 		self.style.configure('Treeview', rowheight=settings['font'][1] * 2, font=settings['font']); self.style.configure('Treeview.Item', indicatorsize=0, font=settings['font']); self.style.configure('Treeview.Heading', font=settings['font']); self.style.configure('TLabel', font=settings['font'])  # configure treeview and style fonts
 	def mode_loading(self, settings) -> None:
 		import tkinter as tk
-		self.tree.heading('#0', text='File:', anchor='w'); self.button['command'] = lambda: print('button pressed, line:', inspect.currentframe().f_lineno)  # configure tree
-		for num, file in enumerate([file for file in os.listdir() if file[-5:] == '.json']):
-			self.tree.insert('', 'end', f'{num}.', text=f'{num}. ' + file.split('.json')[0])  # insert files to tree
+		self.tree.heading('#0', text='File:', anchor='w'); self.button['command'] = lambda: print('button pressed, line:', inspect.currentframe().f_lineno)  # configure tree and button
+		# for each file in dir that ends in .json insert file into tree
+		[self.tree.insert('', 'end', f'{num}.', text=f'{num}. ' + file.split('.json')[0]) for num, file in enumerate([file for file in os.listdir() if file[-5:] == '.json'])]
+
 		while not Type.all:  # while no works are loaded
 			self.root.mainloop()  # wait until <double-1> or <enter>
 			if self.event == 'tree' and self.tree_input != '':

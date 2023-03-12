@@ -51,7 +51,7 @@
 			"https://comickiba.com/manga/cultivator-against-hero-society",
 			"https://readmanganato.com/manga-iu985829"
 		],
-		"chapter": 248.0,
+		"chapter": 249.0,
 		"score": "Great",
 		"tags": ["Op Mc"]
 	},
@@ -89,7 +89,7 @@
 			"https://www.asurascans.com/manga/the-max-level-hero-has-returned/",
 			"https://readmanganato.com/manga-je987087"
 		],
-		"chapter": 120.0,
+		"chapter": 121.0,
 		"score": "Great",
 		"tags": ["Reading", "Op Mc"]
 	},
@@ -119,7 +119,7 @@
 		"links": ["https://readmanganato.com/manga-dm980447"],
 		"chapter": 114.0,
 		"score": "Great",
-		"tags": ["Op Mc","Hiatus","ReRead"]
+		"tags": ["Op Mc", "Hiatus", "ReRead"]
 	},
 	{
 		"format": "Manga",
@@ -208,7 +208,7 @@
 			"https://mangacultivator.com/manga/i-destined-heavenly-villain/",
 			"https://www.mcreader.net/manga/me-the-heavenly-destined-villain-mg1/"
 		],
-		"chapter": 72.0,
+		"chapter": 73.0,
 		"score": "Great",
 		"tags": [
 			"Op Mc",
@@ -279,7 +279,7 @@
 		"links": [
 			"https://asura.gg/manga/player-who-returned-10000-years-later"
 		],
-		"chapter": 47.0,
+		"chapter": 48.0,
 		"score": "Great",
 		"tags": ["Op Mc", "Reading"]
 	},
@@ -290,7 +290,7 @@
 			"https://readmanganato.com/manga-kp987798",
 			"https://asura.gg/manga/doctors-rebirth/"
 		],
-		"chapter": 114.0,
+		"chapter": 115.0,
 		"score": "Great",
 		"tags": ["Color", "Strong Lead", "Reading"]
 	},
@@ -315,7 +315,7 @@
 			"https://chapmanganato.com/manga-oy991407",
 			"https://manhuaus.com/manga/the-eternal-supreme"
 		],
-		"chapter": 174.0,
+		"chapter": 175.0,
 		"score": "Good+",
 		"tags": ["Strong Lead"]
 	},
@@ -1686,6 +1686,14 @@
 	},
 	{
 		"format": "Manga",
+		"name": "Return Of The Top Hunter",
+		"links": ["https://chapmanganato.com/manga-on992070"],
+		"chapter": 25.0,
+		"score": "Good-",
+		"tags": ["Strong Lead"]
+	},
+	{
+		"format": "Manga",
 		"name": "Cultivation Chat Group",
 		"links": ["https://readmanganato.com/manga-bf978788"],
 		"chapter": 439.0,
@@ -2342,5 +2350,62 @@
 		"links": ["https://readmanganato.com/manga-ee982239"],
 		"chapter": 7.0,
 		"score": "no Good"
+	},
+	{
+		"format": "Manga",
+		"name": "Ending Maker",
+		"links": ["https://www.asurascans.com/manga/ending-maker"],
+		"chapter": 36.0,
+		"score": "Good",
+		"tags": "Strong Lead"
+	},
+	{
+		"format": "Manga",
+		"name": "Saga of Tanya the Evil",
+		"links": ["https://mangabuddy.com/read/youjo-senki/"],
+		"chapter": 0,
+		"tags": ["to read", "alt name: Youjo Senki"]
+	},
+	{
+		"format": "Manga",
+		"name": "Return of the Mount Hua Sect",
+		"links": [
+			"https://www.asurascans.com/manga/return-of-the-mount-hua-sect/"
+		],
+		"chapter": 0,
+		"score": "Good",
+		"tags": ["kinda cringe"]
+	},
+	{
+		"format": "Manga",
+		"name": "One Pair Lady",
+		"links": ["https://mangabuddy.com/one-pair-lady"],
+		"chapter": 0,
+		"score": "Good-",
+		"tags": []
+	},
+	{
+		"format": "Manga",
+		"name": "Chronicles Of Heavenly Demon",
+		"links": ["https://mangabuddy.com/chronicles-of-heavenly-demon"],
+		"chapter": 71,
+		"score": "Good-",
+		"tags": []
+	},
+	{
+		"format": "Manga",
+		"name": "Murcielago ARANA",
+		"links": ["https://mangabuddy.com/murcielago-arana", "https://lilymanga.com/ys/murcielago-arana/"],
+		"chapter": 5,
+		"score": "Good+",
+		"tags": ["Strong Lead", "Mature", "contains some smut", "alt name: Murciélago ARAÑA"]
+	},
+	{
+		"format": "Manga",
+		"name": "One Million Gold",
+		"links": ["https://mangabuddy.com/one-million-gold", "https://www.webtoons.com/en/challenge/-/-?title_no=327163"],
+		"chapter": 32,
+		"score": "Good+",
+		"tags": []
 	}
 ]

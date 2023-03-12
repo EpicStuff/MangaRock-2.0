@@ -201,8 +201,7 @@ class GUI():
 			self.root.quit()  # resume code
 		def tree_open(self, e: tk.Event) -> None:  # runs when a tree node is opened
 			node = self.tree.focus()  # set node to opened node
-			if '.' in node:
-				self.open_children.append(node)  # if is child node: take note
+			if '.' in node: self.open_children.append(node)  # if is child node: take note
 			else:
 				if self.open_node != '':
 					self.tree.item(self.open_node, open=False)  # close previous open node
@@ -220,7 +219,8 @@ class GUI():
 		self.style.configure('Treeview', rowheight=settings['font'][1] * 2, font=settings['font']); self.style.configure('Treeview.Item', indicatorsize=0, font=settings['font']); self.style.configure('Treeview.Heading', font=settings['font']); self.style.configure('TLabel', font=settings['font'])  # configure treeview and style fonts
 	def mode_loading(self, settings) -> None:
 		import tkinter as tk
-		self.tree.heading('#0', text='File:', anchor='w'); self.button['command'] = lambda: print('button pressed, line:', inspect.currentframe().f_lineno)  # configure tree and button
+		# configure tree and button
+		self.tree.heading('#0', text='File:', anchor='w'); self.button['command'] = lambda: print('button pressed, line:', inspect.currentframe().f_lineno)
 		# for each file in dir that ends in .json insert file into tree
 		[self.tree.insert('', 'end', f'{num}.', text=f'{num}. ' + file.split('.json')[0]) for num, file in enumerate([file for file in os.listdir() if file[-5:] == '.json'])]
 

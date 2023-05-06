@@ -152,25 +152,6 @@ def main(dir=os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')):
 		if format in (Author, Series): return 'Not yet implemented'
 		return format(*args, **kwargs)  # return works object
 
-	# def update_tree() -> None:  # To-Do: rewrite
-	# 	for num, work in enumerate(Works.all):
-	# 		"updates work's node's and its links' column values"  # To-Do: re show works that have been hidden if there now is new chapters
-	# 		try: work.lChs[0]
-	# 		except (IndexError, AttributeError): continue  # if work has no links or has not yet been updated: skip
-	# 		if work.lChs[0][1] < 0: nChs = work.lChs[0][1]  # if all work's links are errors: set nChs to error code
-	# 		else:  # else work has updated without error
-	# 			nChs = work.lChs[0][1] - work.chapter  # set nChs to lastest chapter - current chapter
-	# 			if settings['hide_unupdated_works'] and not nChs > 0: tree.detach(num)  # if hide_unupdated_works = True and there are no new chapters
-	# 		if 'nChs' in tree['columns']:  # if tree has a new chapters column
-	# 			tree.set(num, 'nChs', f'{nChs:g}')  # set its new chapters to new chapters
-	# 			for link_pair in work.lChs:  # for each of its links
-	# 				if link_pair[1] >= 0: tree.set(f'{num}.{link_pair[0]}', 'nChs', f'{link_pair[1] - work.chapter:g}')  # if link has updated without error: set the new chapters to new chapters
-	# 		if 'chapter' in tree['columns']:  # if tree has a chapters column
-	# 			tree.set(num, 'chapter', f'{work.chapter:g}')  # set its chapters to work.chapter
-	# 			for link_pair in work.lChs: tree.set(f'{num}.{link_pair[0]}', 'chapter', f'{link_pair[1]:g}')  # for each of its links: set chapter to the link's latest chapter
-	# 		if 'lChs' in tree['columns']: tree.set(num, 'lChs', f'{work.lChs[0][1]:g}')  # if tree has a latest chapters column: set its latest chapter to its latest chapter
-	# 	root.after(10, update_tree)
-
 	def update_nodes(pipe_exit):
 		while pipe_exit.poll():
 			num, lChs = pipe_exit.recv(); work = Works.all[num]; work.lChs = lChs; del lChs
@@ -371,4 +352,3 @@ def debug(link):
 
 if __name__ == '__main__':
 	main()
-	# debug(['https://mangapuma.com/the-strongest-civilian-in-xiuxian-academy'])

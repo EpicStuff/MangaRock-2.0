@@ -1,6 +1,7 @@
 {
 	themes: [
 		"awbreezedark",
+		"awdark",
 	],
 	font: [
 		"OCR A Extended",
@@ -15,7 +16,6 @@
 		ok: 1,
 		"ok+": 1.1,
 		decent: 1.5,
-		"Good-": 1.5,
 		Good: 2,
 		"Good+": 2.1,
 		Great: 3,
@@ -26,7 +26,7 @@
 			chapter: "Current Chapter",
 			tags: "Tags",
 		},
-		Text: {
+		example: {
 			nChs: "New Chapters",
 			chapter: "Current Chapter",
 			tags: "Tags",
@@ -40,10 +40,4 @@
 	webbrowser_executable: "C:/Program Files/Google/Chrome/Application/chrome.exe",
 	webbrowser_arg: "--profile-directory=\"Default\" \"%l\"",
 	backup_directory: "/backup",
-	theme: [
-		"awbreezedark",
-		"awdark",
-	],
-	chrome_path: "C:/Program Files/Google/Chrome/Application/chrome.exe",
-	chrome_profile: "Default",
 }

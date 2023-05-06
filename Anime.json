@@ -340,5 +340,19 @@
 			"Ongoing",
 			" - apparently"
 		]
+	},
+	{
+		"format": "Anime",
+		"name": "Jormungand",
+		"links": ["https://9anime.to/watch/jormungand.k5v", "https://9anime.to/watch/jormungand-perfect-order.ljz"],
+		"episode": 24,
+		"score": "Great",
+		"tags": [
+			"Watched",
+			"ReWatched",
+			"Complete",
+			"watch both season 1 and season 2, 12 ep. each",
+			"couldve used an epilogue"
+		]
 	}
 ]

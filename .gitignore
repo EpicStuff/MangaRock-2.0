@@ -1,6 +1,4 @@
 .vscode/
 Backup/
 __pycache__/
-scraper/
-settings.json5
-MangaRock 3.2.5.py
+.gitignore

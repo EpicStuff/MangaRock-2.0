@@ -1,4 +1,0 @@
-bs4
-json5
-pyperclip
-requests-html

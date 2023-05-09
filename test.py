@@ -1,9 +1,20 @@
 import PySimpleGUIWeb as sg
 
+# sg.theme_previewer()
+
+sg.theme('Dark Blue 13')
+
+treedata = sg.TreeData()
+treedata.insert('', 'test', 'testing', 123)
+
 layout = [
-	[sg.Text('Choose File')],
-	# [sg.TreeData()],
-	[sg.Input(key='input'), sg.Button('⠀⠀')]]
+	[sg.Text('Choose File', key='label')],
+	[sg.Tree(treedata, key='tree', headings=['File:'], num_rows=1)],
+	[sg.Input(key='input'), sg.Button('', key='button', size=(25, 25))]]
+
+
+window = sg.Window(__name__, layout)
+window.read()
 
 class tmp():
 	def __init__(self):
@@ -18,6 +29,9 @@ class tmp():
 			else: break  # if style loading does not fail, stop from loading other themes
 		self.style.configure('Treeview', rowheight=settings['font'][1] * 2, font=settings['font']); self.style.configure('Treeview.Item', indicatorsize=0, font=settings['font']); self.style.configure('Treeview.Heading', font=settings['font']); self.style.configure('TLabel', font=settings['font'])  # configure treeview and style fonts
 
-
-window = sg.Window(__name__, layout)
-window.read()
+	def tmp():
+		root = tk.Tk(); stringVar = tk.StringVar(); label = ttk.Label(root, justify='left', text='Mode: Reading'); tree = ttk.Treeview(root, selectmode='browse'); scroll = ttk.Scrollbar(root, orient="vertical", command=tree.yview); entry = ttk.Entry(root, textvariable=stringVar, font=settings['font']); button = ttk.Button(root, width=1); style = ttk.Style(root)  # setup GUI variables
+		label.grid(row=0, column=0, columnspan=2, sticky='nesw'); tree.grid(row=1, column=0, columnspan=2, sticky='nesw'); scroll.grid(row=1, column=1, columnspan=1, sticky='nesw'); entry.grid(row=2, column=0, sticky='nesw'); button.grid(row=2, column=1)  # pack elements onto root
+		root.title(__file__.split('\\')[-1].rstrip('.py')); root.columnconfigure(0, weight=1); root.columnconfigure(1, weight=0); root.rowconfigure(1, weight=1); root.geometry('{}x{}'.format(settings['window_size'][0], settings['window_size'][1]))  # configure root
+		tree.bind('<Double-1>', root_quit); tree.bind('<Return>', root_quit); tree.bind('<<TreeviewOpen>>', tree_open); tree.configure(yscrollcommand=scroll.set); entry.bind('<Return>', root_quit); entry.focus_set()  # bind events to tree and entry; configure scrollbar to tree
+		style.configure('Treeview', rowheight=settings['font'][1] * 2, font=settings['font']); style.configure('Treeview.Item', indicatorsize=0, font=settings['font']); style.configure('Treeview.Heading', font=settings['font']); style.configure('TLabel', font=settings['font'])  # configure treeview and style fonts

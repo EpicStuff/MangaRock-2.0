@@ -242,14 +242,9 @@ class GUI():
 		return file
 
 
-def test():
-	settings = load_settings('settings.yaml')
-	print(settings['scores']['None'])
-
 
 if __name__ == '__main__':
 	main(*sys.argv)
-	# test()
 
 # def update_all(works: list | tuple, pipe_enter, settings) -> None:
 # 	'updates all works provided'

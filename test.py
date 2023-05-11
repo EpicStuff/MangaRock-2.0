@@ -1,21 +1,127 @@
-import PySimpleGUIWeb as sg
+from nicegui import ui
 
-# sg.theme_previewer()
+# ui.dark_mode().enable()
+label = ui.label('Choose File:')
 
-sg.theme('Dark Black 1')
+# columns = [{'name': 'files', 'lable': 'Files:', 'field': 'test', 'required': True}]
+# ui.table(columns=columns, rows=[{'name': 'exmaple'}])
 
-data = ['Rajeev', 'Rajani', 'Rahul', 'Robin']
+# columns = [
+# 	{'name': 'name', 'label': 'Name', 'field': 'name', 'align': 'left'},
+# 	{'name': 'age', 'label': 'Age', 'field': 'age'},
+# ]
+# rows = [
+# 	{'name': 'Alice', 'age': 18},
+# 	{'name': 'Bob', 'age': 21},
+# 	{'name': 'Carol'},
+# ]
+# table = ui.table(columns=columns, rows=rows, row_key='name', selection='single').classes('w-full')
+# table.add_slot('header', r'''
+# 	<q-tr>
+# 		<q-th>Name:</q-th>
+# 		<q-th auto-width />
+# 		<q-th>Age</q-th>
+# 	</q-tr>
+# ''')
+# table.add_slot('body', r'''
+# 	<q-tr :props="props">
+# 		<q-td auto-width>
+# 			<q-btn size="sm" dense
+# 				@click="props.expand = !props.expand"
+# 				:icon="props.expand ? 'remove' : 'add'" />
+# 		</q-td>
+# 		<q-td v-for="col in props.cols" :key="col.name" :props="props">
+# 			{{ col.value }}
+# 		</q-td>
+# 	</q-tr>
+
+# 	<q-tr v-show="props.expand" :props="props">
+# 		<q-td colspan="100%">
+# 			<div class="text-left">This is {{ props.row.name }}.</div>
+# 		</q-td>
+# 	</q-tr>
+# 	<q-tr v-show="props.expand" :props="props">
+# 		<q-td colspan="50%">
+# 			<div class="text-left">This is {{ props.row.name }}.</div>
+# 		</q-td>
+# 	</q-tr>
+# ''')
+def tmp(*args):
+	print(args)
+
+data = [{"athlete":"Michael Phelps","age":23,"country":"United States","year":2008,"date":"24/08/2008","sport":"Swimming","gold":8,"silver":0,"bronze":0,"total":8},{"athlete":"Michael Phelps","age":19,"country":"United States","year":2004,"date":"29/08/2004","sport":"Swimming","gold":6,"silver":0,"bronze":2,"total":8},{"athlete":"Michael Phelps","age":27,"country":"United States","year":2012,"date":"12/08/2012","sport":"Swimming","gold":4,"silver":2,"bronze":0,"total":6},{"athlete":"Natalie Coughlin","age":25,"country":"United States","year":2008,"date":"24/08/2008","sport":"Swimming","gold":1,"silver":2,"bronze":3,"total":6},{"athlete":"Aleksey Nemov","age":24,"country":"Russia","year":2000,"date":"01/10/2000","sport":"Gymnastics","gold":2,"silver":1,"bronze":3,"total":6},{"athlete":"Alicia Coutts","age":24,"country":"Australia","year":2012,"date":"12/08/2012","sport":"Swimming","gold":1,"silver":3,"bronze":1,"total":5},{"athlete":"Missy Franklin","age":17,"country":"United States","year":2012,"date":"12/08/2012","sport":"Swimming","gold":4,"silver":0,"bronze":1,"total":5},{"athlete":"Ryan Lochte","age":27,"country":"United States","year":2012,"date":"12/08/2012","sport":"Swimming","gold":2,"silver":2,"bronze":1,"total":5},{"athlete":"Allison Schmitt","age":22,"country":"United States","year":2012,"date":"12/08/2012","sport":"Swimming","gold":3,"silver":1,"bronze":1,"total":5},{"athlete":"Natalie Coughlin","age":21,"country":"United States","year":2004,"date":"29/08/2004","sport":"Swimming","gold":2,"silver":2,"bronze":1,"total":5},{"athlete":"Ian Thorpe","age":17,"country":"Australia","year":2000,"date":"01/10/2000","sport":"Swimming","gold":3,"silver":2,"bronze":0,"total":5},{"athlete":"Dara Torres","age":33,"country":"United States","year":2000,"date":"01/10/2000","sport":"Swimming","gold":2,"silver":0,"bronze":3,"total":5},{"athlete":"Cindy Klassen","age":26,"country":"Canada","year":2006,"date":"26/02/2006","sport":"Speed Skating","gold":1,"silver":2,"bronze":2,"total":5},{"athlete":"Nastia Liukin","age":18,"country":"United States","year":2008,"date":"24/08/2008","sport":"Gymnastics","gold":1,"silver":3,"bronze":1,"total":5},{"athlete":"Marit Bjørgen","age":29,"country":"Norway","year":2010,"date":"28/02/2010","sport":"Cross Country Skiing","gold":3,"silver":1,"bronze":1,"total":5}]
+grid = ui.aggrid({
+	'rowData': data,
+	'columnDefs': [
+		{ 'field': 'country', 'rowGroup': True, 'hide': True },
+		{ 'field': 'year', 'rowGroup': True, 'hide': True },
+		{ 'field': 'athlete' },
+		{ 'field': 'sport' },
+		{ 'field': 'gold' },
+		{ 'field': 'silver' },
+		{ 'field': 'bronze' },
+	],
+	'defaultColDef': {
+		'flex': 1,
+		'minWidth': 100,
+		'sortable': True,
+		'resizable': True,
+	},
+	'autoGroupColumnDef': {
+		'minWidth': 200,
+	},
+	'animateRows': True,
+}).classes(remove='ag-theme-balham').classes('ag-theme-alpine-dark')
+# grid.call_api_method('setRowData', data)
+
+# grid = ui.aggrid({
+# 	# 'columnDefs': [
+# 	# 	{'headerName': 'Name', 'field': 'name', 'resizable': True},
+# 	# 	{'headerName': 'Age', 'field': 'age', 'width': 10},
+# 	# ],
+# 	'rowData': [
+# 		{'orgHierarchy': ['A']},
+# 		{'orgHierarchy': ['A', 'B']},
+# 		{'orgHierarchy': ['C', 'D']},
+# 		{'orgHierarchy': ['E', 'F', 'G', 'H']},
+# 	],
+# 	# 'rowSelection': 'single',
+# 	# 'treeData': True,
+# 	'columnDefs': [
+# 		# we're using the auto group column by default!
+# 		{
+# 			'field': 'groupType',
+# 			# 'valueGetter': (params) => {
+# 			# 	return params.data ? 'Provided' : 'Filler';
+# 			# },
+# 		},
+# 	],
+# 	'defaultColDef': {
+# 		'flex': 1,
+# 	},
+# 	'autoGroupColumnDef': {
+# 		'headerName': 'Organisation Hierarchy',
+# 		'cellRendererParams': {
+# 		'suppressCount': True,
+# 		},
+# 	},
+# 	'treeData': True, # enable Tree Data mode
+# 	'animateRows': True,
+# 	'groupDefaultExpanded': -1, # expand all groups by default
+# 	# 'getDataPath': (data) => {
+# 	# 	return data.orgHierarchy;
+# 	# },
+# }).classes(remove='ag-theme-balham').classes('ag-theme-alpine-dark')
+grid.on('cellDoubleClicked', tmp)
+# grid.call_api_method('sizeColumnsToFit')
+with ui.row():
+	ui.input()
+	ui.button()
 
 
-layout = [
-    [sg.Text('Choose File', key='label')],
-   	[sg.Listbox(data,size=(64, 8), key='tree')],
-   	[sg.Input(key='input'), sg.Button('', key='button', size=(25, 25))]]
+ui.dark_mode().enable()
 
-
-window = sg.Window(__name__, layout)
-window.read()
-
+ui.run(dark=True, title='MangaRock 2.0')
 # class tmp():
 # 	def __init__(self):
 # 	self.input = tk.StringVar(); self.tree = ttk.Treeview(self.root, selectmode='browse'); self.scroll = ttk.Scrollbar(self.root, orient="vertical", command=self.tree.yview); self.entry = ttk.Entry(self.root, textvariable=self.input, font=settings['font']); self.button = ttk.Button(self.root, width=1); self.style = ttk.Style(self.root); self.open_node = ''  # setup GUI variables

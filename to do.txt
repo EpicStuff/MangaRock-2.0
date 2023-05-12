@@ -3,3 +3,4 @@ remove 'No Rows To Show' "overlay" on aggrid when no files present
 make sure load settings doesn't just overwrite user settings with default settings
 add ability to change font
 make aggrid row properly shink (maybe by changing theme instead of adding rowHeight to gridOptions)
+fix column size/resizing

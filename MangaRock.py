@@ -145,7 +145,8 @@ def load_settings(settings_file: str, default_settings: str) -> dict:
 	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
 	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
 def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml', *args):
-	def open_file(gui: GUI, file: dict) -> None:
+	import asyncio
+	def enter_reading_mode_for_file(gui: GUI, file: dict) -> None:
 		def load_file(file: str) -> None:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			def add_work(format: str | Type, *args, **kwargs) -> Type:
@@ -178,12 +179,36 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 		# 	{'name': 'testing', 'link': 'testing.com', 'nChs': 2, 'chapter': 0, 'lChs': 9, 'tags': ['t2', 't3']},
 		# 	{'name': 'testing', 'link': 'testing.com', 'nChs': 1, 'chapter': 0, 'lChs': 9, 'tags': ['t2', 't3']},
 		# ]
+	# def update_all(gui: GUI, works: list | tuple) -> None:
+	# 	'updates all works provided'
+	# 	import asyncio
+	# 	from requests_html import AsyncHTMLSession
+	# 	updaters, renderers = asyncio.Semaphore(settings['total_updaters']), asyncio.Semaphore(settings['total_renderers'])
+
+	# 	async def update_each(num, work, session):
+	# 		async with updaters:
+	# 			pipe_enter.send((num, await work.update(session, renderers)))
+
+	# 	async def a_main(): session = AsyncHTMLSession(); await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
+
+	# 	asyncio.run(a_main())
+	
+	async def tmp(x):
+		print('starting tmp', x)
+		await asyncio.sleep(1)
+		print('done tmp', x)
+
+	async def async_test(gui: GUI, works: list | tuple = None) -> None:
+		print('starting async_test')
+		for x in range(10):
+			await tmp(x)
+		print('done async_test')
 
 	os.chdir(dir)
 	settings = load_settings(settings_file, default_settings)
 	gui = GUI(settings)
 	files = [{'name': file.split('.json')[0]} for file in os.listdir() if file[-5:] == '.json']
-	gui.mode_loading(files, open_file)
+	gui.mode_loading(files, enter_reading_mode_for_file)
 	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.py'))
 
 
@@ -195,7 +220,7 @@ class GUI():
 		self.tab_panels = ui.tab_panels(self.tabs, value='Main')
 		self.open_tabs = {'Main', }
 		self.settings = settings
-	def mode_loading(self, files: list, func: Callable) -> None:
+	def mode_loading(self, files: list, func_select: Callable) -> None:
 		with self.tab_panels:
 			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
 				ui.label('Choose File: ')
@@ -211,11 +236,11 @@ class GUI():
 					'rowHeight': self.settings['row_height'],
 					# 'rowStyle': {'margin-top': '-4px'}  # not doing anything
 				}
-				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func(self, event))
+				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func_select(self, event))
 				with ui.row().classes('w-full'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 					ui.button().props('square').style('width: 40px; height: 40px;')
-	def mode_reading(self, file: str, columnDefs: list, rowData: list):
+	def mode_reading(self, file: str, columnDefs: list, rowData: list, func_select: Callable, func_done: Callable) -> None:
 		def switch_tab(event: dict):
 			self.tabs.props(f'model-value={event["args"]}')
 			self.tab_panels.props(f'model-value={event["args"]}')
@@ -248,10 +273,12 @@ class GUI():
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
 				}
-				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func(self, event))
+				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func_select(self, event))
 				with ui.row().classes('w-full').style('gap: 0'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
 					ui.button().props('square').style('width: 40px; height: 40px;')
+
+		func_done()
 
 
 if __name__ in {"__main__", "__mp_main__"}:
@@ -332,19 +359,7 @@ class GUI():
 			subclass.format()  # connect works to series to authors to fandoms, etc. not yet implemented
 		return file
 
-def update_all(works: list | tuple, pipe_enter, settings) -> None:
-	'updates all works provided'
-	import asyncio
-	from requests_html import AsyncHTMLSession
-	updaters, renderers = asyncio.Semaphore(settings['total_updaters']), asyncio.Semaphore(settings['total_renderers'])
 
-	async def update_each(num, work, session):
-		async with updaters:
-			pipe_enter.send((num, await work.update(session, renderers)))
-
-	async def a_main(): session = AsyncHTMLSession(); await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
-
-	asyncio.run(a_main())
 
 	# try:
 	# 	if self.links == []: raise TypeError  # if no links

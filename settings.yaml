@@ -1,6 +1,6 @@
 dark_mode: true # default: true
 font: [OCR A Extended, 8] # [font name, font size]
-default_column_width: 32
+default_column_width: 16
 row_height: 32
 to_display: # culumns to display for each Type, do not include name (it's required and auto included)
     Manga: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}

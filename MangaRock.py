@@ -88,36 +88,38 @@ class Link(Type):   all = {}; prop = {'name': None, 'site': None}
 
 
 default_settings = '''
-	dark_mode: true # default: true
-	font: [OCR A Extended, 8] # [font name, font size], default: [OCR A Extended, 8]
-	hide_unupdated_works: true # default: true
-	hide_works_with_no_links: true # default: true
-	sort_by: score # defulat: score
-	# prettier-ignore
-	scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
-	to_display: # culumns to display for each Type
-	    Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
-	    Text: {author: Author, nChs: New Chapters, chapter: Current Chapter, tags: Tags}
-	# prettier-ignore
-	sites: #site,                 find,  with,                       then_find, and get,       split at, then get, render?
-	    manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
-	    www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
-	    manhuascan.com:     &003 [div,   class: list-wrap,           a,         href,          '-',      -1,       false]
-	    zahard.xyz:         &004 [ul,    class: chapters,            a,         href,          /,        -1,       false]
-	    www.royalroad.com:  &005 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]
-	    1stkissmanga.io:    &006 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       false]
-	    comickiba.com:      &007 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       true]
-	    asura.gg:           &008 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
-	    mangapuma.com:      &009 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
-	    bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
-	    www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
-	    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011] # for formatting reasons
-	    chapmanganato.com:  *001
-	    readmanganato.com:  *001
-	    nitroscans.com:     *007
-	    anshscans.org:      *007
-	    flamescans.org:     *008
-	    www.mcreader.net:   *011
+dark_mode: true # default: true
+font: [OCR A Extended, 8] # [font name, font size]
+default_column_width: 32
+row_height: 32
+to_display: # culumns to display for each Type, do not include name (it's required and auto included)
+    Manga: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+    example: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+hide_unupdated_works: true # default: true
+hide_works_with_no_links: true # default: true
+sort_by: score # defulat: score
+# prettier-ignore
+scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
+# prettier-ignore
+sites: #site,                 find,  with,                       then_find, and get,       split at, then get, render?
+    manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
+    www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
+    manhuascan.com:     &003 [div,   class: list-wrap,           a,         href,          '-',      -1,       false]
+    zahard.xyz:         &004 [ul,    class: chapters,            a,         href,          /,        -1,       false]
+    www.royalroad.com:  &005 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]
+    1stkissmanga.io:    &006 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       false]
+    comickiba.com:      &007 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       true]
+    asura.gg:           &008 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+    mangapuma.com:      &009 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
+    bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
+    www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011] # for formatting reasons
+    chapmanganato.com:  *001
+    readmanganato.com:  *001
+    nitroscans.com:     *007
+    anshscans.org:      *007
+    flamescans.org:     *008
+    www.mcreader.net:   *011
 '''
 
 def load_settings(settings_file: str, default_settings: str) -> dict:
@@ -152,27 +154,47 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 				return format(*args, **kwargs)  # return works object
 
 			import json
-			with open(file, 'r') as file:
-				json.load(file, object_hook=lambda kwargs: add_work(**kwargs))
+			with open(file, 'r') as f:
+				json.load(f, object_hook=lambda kwargs: add_work(**kwargs))
 			return file.rstrip('.json')
 
-		file = load_file(file['args']['data']['name']+'.json')
-		gui.mode_reading(file)
+		file = load_file(file['args']['data']['name'] + '.json')
+		cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
+		try:
+			for key, val in settings['to_display'][file].items():  # todo: maybe turn into list comprehension
+				cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': settings['default_column_width']})
+		except KeyError as e: print('Columns for', e, 'has not been specified in settings.yaml'); raise Exception  # todo: setup default columns instead of crash
+		cols[-1]['resizable'] = False
+		works = []
+		for work in Type.all:
+			for link in work.links:
+				works.append({'name': work.name, 'link': link, 'chapter': work.chapter, 'tags': work.tags},)
+		gui.mode_reading(file, cols, works)
+
+		# works = [
+		# 	{'name': 'Test', 'link': 'testing.com', 'nChs': 3, 'chapter': 1, 'lChs': 9, 'tags': 't1'},
+		# 	{'name': 'Test', 'link': 'testing.com', 'nChs': 4, 'chapter': 1, 'lChs': 9, 'tags': 't1'},
+		# 	{'name': 'testing', 'link': 'testing.com', 'nChs': 2, 'chapter': 0, 'lChs': 9, 'tags': ['t2', 't3']},
+		# 	{'name': 'testing', 'link': 'testing.com', 'nChs': 2, 'chapter': 0, 'lChs': 9, 'tags': ['t2', 't3']},
+		# 	{'name': 'testing', 'link': 'testing.com', 'nChs': 1, 'chapter': 0, 'lChs': 9, 'tags': ['t2', 't3']},
+		# ]
 
 	os.chdir(dir)
 	settings = load_settings(settings_file, default_settings)
-	gui = GUI(settings, dir)
-	files = [{'num': f'{num}.', 'name': file.split('.json')[0]} for num, file in enumerate([file for file in os.listdir() if file[-5:] == '.json'])]
+	gui = GUI(settings)
+	files = [{'name': file.split('.json')[0]} for file in os.listdir() if file[-5:] == '.json']
 	gui.mode_loading(files, open_file)
 	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.py'))
 
 
 class GUI():
-	def __init__(self, settings: dict, dir: str) -> None:
+	def __init__(self, settings: dict) -> None:
 		ui.query('div').style('gap: 0')
 		with ui.tabs().props('dense') as self.tabs:
 			ui.tab('Main')
 		self.tab_panels = ui.tab_panels(self.tabs, value='Main')
+		self.open_tabs = {'Main', }
+		self.settings = settings
 	def mode_loading(self, files: list, func: Callable) -> None:
 		with self.tab_panels:
 			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
@@ -183,35 +205,51 @@ class GUI():
 						'suppressMenu': True,
 					},
 					'columnDefs': [
-						{'headerName': '', 'field': 'num', 'width': 16, 'minWidth': 8, 'maxWidth': 48},
 						{'headerName': 'Name', 'field': 'name', 'resizable': False},
 					],
 					'rowData': files,
+					'rowHeight': self.settings['row_height'],
+					# 'rowStyle': {'margin-top': '-4px'}  # not doing anything
 				}
 				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func(self, event))
 				with ui.row().classes('w-full'):
-					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
+					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 					ui.button().props('square').style('width: 40px; height: 40px;')
-	def mode_reading(self, file: str):
-		with self.tabs:
-			ui.tab(file)
+	def mode_reading(self, file: str, columnDefs: list, rowData: list):
+		def switch_tab(event: dict):
+			self.tabs.props(f'model-value={event["args"]}')
+			self.tab_panels.props(f'model-value={event["args"]}')
+
+		self.tabs.on('update:model-value', switch_tab)
+		if file not in self.open_tabs:
+			# create new tab if tab does not already exist
+			with self.tabs:
+				ui.tab(file)
+			self.open_tabs.add(file)
+		# switch to (newly created) tab
+		switch_tab({'args': file})
+		# populate tab panel
 		with self.tab_panels:
-			works = []
 			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
 				ui.label('Reading: ')
 				gridOptions = {
 					'defaultColDef': {
 						'resizable': True,
 						'suppressMenu': True,
+						'cellRendererParams': {'suppressCount': True, },
 					},
-					'columnDefs': [
-						{'headerName': '', 'field': 'num', 'width': 16, 'minWidth': 8, 'maxWidth': 48},
-						{'headerName': 'Name', 'field': 'name', 'resizable': False},
-					],
-					'rowData': works,
+					'autoGroupColumnDef': {
+						'headerName': 'Name',
+						'field': 'link',
+					},
+					'columnDefs': columnDefs,
+					'rowData': rowData,
+					'rowHeight': self.settings['row_height'],
+					'animateRows': True,
+					'suppressAggFuncInHeader': True,
 				}
 				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func(self, event))
-				with ui.row().classes('w-full'):
+				with ui.row().classes('w-full').style('gap: 0'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
 					ui.button().props('square').style('width: 40px; height: 40px;')
 

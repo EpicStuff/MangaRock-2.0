@@ -1,13 +1,15 @@
 dark_mode: true # default: true
-font: [OCR A Extended, 8] # [font name, font size], default: [OCR A Extended, 8]
+font: [OCR A Extended, 8] # [font name, font size]
+default_column_width: 32
+row_height: 32
+to_display: # culumns to display for each Type, do not include name (it's required and auto included)
+    Manga: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+    example: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
 hide_unupdated_works: true # default: true
 hide_works_with_no_links: true # default: true
 sort_by: score # defulat: score
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
-to_display: # culumns to display for each Type
-    Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
-    Text: {author: Author, nChs: New Chapters, chapter: Current Chapter, tags: Tags}
 # prettier-ignore
 sites: #site,                 find,  with,                       then_find, and get,       split at, then get, render?
     manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]

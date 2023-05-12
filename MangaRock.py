@@ -96,28 +96,28 @@ default_settings = '''
 	# prettier-ignore
 	scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
 	to_display: # culumns to display for each Type
-		Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
-		Text: {author: Author, nChs: New Chapters, chapter: Current Chapter, tags: Tags}
+	    Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
+	    Text: {author: Author, nChs: New Chapters, chapter: Current Chapter, tags: Tags}
 	# prettier-ignore
 	sites: #site,                 find,  with,                       then_find, and get,       split at, then get, render?
-		manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
-		www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
-		manhuascan.com:     &003 [div,   class: list-wrap,           a,         href,          '-',      -1,       false]
-		zahard.xyz:         &004 [ul,    class: chapters,            a,         href,          /,        -1,       false]
-		www.royalroad.com:  &005 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]
-		1stkissmanga.io:    &006 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       false]
-		comickiba.com:      &007 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       true]
-		asura.gg:           &008 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
-		mangapuma.com:      &009 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
-		bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
-		www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
-		null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011] # for formatting reasons
-		chapmanganato.com:  *001
-		readmanganato.com:  *001
-		nitroscans.com:     *007
-		anshscans.org:      *007
-		flamescans.org:     *008
-		www.mcreader.net:   *011
+	    manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
+	    www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
+	    manhuascan.com:     &003 [div,   class: list-wrap,           a,         href,          '-',      -1,       false]
+	    zahard.xyz:         &004 [ul,    class: chapters,            a,         href,          /,        -1,       false]
+	    www.royalroad.com:  &005 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]
+	    1stkissmanga.io:    &006 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       false]
+	    comickiba.com:      &007 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       true]
+	    asura.gg:           &008 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+	    mangapuma.com:      &009 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
+	    bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
+	    www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+	    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011] # for formatting reasons
+	    chapmanganato.com:  *001
+	    readmanganato.com:  *001
+	    nitroscans.com:     *007
+	    anshscans.org:      *007
+	    flamescans.org:     *008
+	    www.mcreader.net:   *011
 '''
 
 def load_settings(settings_file: str, default_settings: str) -> dict:
@@ -142,19 +142,22 @@ def load_settings(settings_file: str, default_settings: str) -> dict:
 	except FileNotFoundError as e: print(e)  # except: print error
 	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
 	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
-def load_file(file: str) -> str:
-	'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
-	import json
-	def add_work(format: str | Type, *args, **kwargs) -> Type:
-		'formats `Type` argument and returns the created object'
-		if format.__class__ is str: format = eval(format)  # if the format is a string, turn in into an object
-		return format(*args, **kwargs)  # return works object
-	with open(file, 'r') as file:
-		json.load(file, object_hook=lambda kwargs: add_work(**kwargs))
-		return file.rstrip('.json')
 def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml', *args):
 	def open_file(gui: GUI, file: dict) -> None:
-		file = file['args']['data']['name']
+		def load_file(file: str) -> None:
+			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
+			def add_work(format: str | Type, *args, **kwargs) -> Type:
+				'formats `Type` argument and returns the created object'
+				if format.__class__ is str: format = eval(format)  # if the format is a string, turn in into an object
+				return format(*args, **kwargs)  # return works object
+
+			import json
+			with open(file, 'r') as file:
+				json.load(file, object_hook=lambda kwargs: add_work(**kwargs))
+			return file.rstrip('.json')
+
+		file = load_file(file['args']['data']['name']+'.json')
+		gui.mode_reading(file)
 
 	os.chdir(dir)
 	settings = load_settings(settings_file, default_settings)
@@ -184,6 +187,28 @@ class GUI():
 						{'headerName': 'Name', 'field': 'name', 'resizable': False},
 					],
 					'rowData': files,
+				}
+				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func(self, event))
+				with ui.row().classes('w-full'):
+					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
+					ui.button().props('square').style('width: 40px; height: 40px;')
+	def mode_reading(self, file: str):
+		with self.tabs:
+			ui.tab(file)
+		with self.tab_panels:
+			works = []
+			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+				ui.label('Reading: ')
+				gridOptions = {
+					'defaultColDef': {
+						'resizable': True,
+						'suppressMenu': True,
+					},
+					'columnDefs': [
+						{'headerName': '', 'field': 'num', 'width': 16, 'minWidth': 8, 'maxWidth': 48},
+						{'headerName': 'Name', 'field': 'name', 'resizable': False},
+					],
+					'rowData': works,
 				}
 				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func(self, event))
 				with ui.row().classes('w-full'):

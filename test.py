@@ -1,53 +1,48 @@
 from nicegui import ui
-
-# ui.dark_mode().enable()
-label = ui.label('Choose File:')
-
 def tmp(*args):
 	print(args)
 
 
-# grid = ui.aggrid({
-#     'columnDefs': [
-#         {'headerName': 'Name', 'field': 'name', 'resizable': True},
-#         {'headerName': 'Age', 'field': 'age', 'width': 10},
-#     ],
-#     'rowData': [
-#         {'name': 'Alice', 'age': 18},
-#         {'name': 'Bob', 'age': 21},
-#         {'name': 'Carol', 'age': 42},
-#     ],
-#     'rowSelection': 'single'
-# }).classes(remove='ag-theme-balham').classes('ag-theme-alpine-dark')
-# grid.on('cellDoubleClicked', tmp)
-# grid.call_api_method('sizeColumnsToFit')
-# from tmp2 import data
+label = ui.label('Choose File:')
 
-# grid = ui.aggrid({
-# 	'rowData': data,
-# 	'columnDefs': [
-# 		{'field': 'country', 'rowGroup': True, 'hide': True},
-# 		{'field': 'year', 'rowGroup': True, 'hide': True},
-# 		{'field': 'athlete'},
-# 		{'field': 'sport'},
-# 		{'field': 'gold'},
-# 		{'field': 'silver'},
-# 		{'field': 'bronze'},
-# 	],
-# 	'defaultColDef': {
-# 		'flex': 1,
-# 		'minWidth': 100,
-# 		'sortable': True,
-# 		'resizable': True,
-# 	},
-# 	'autoGroupColumnDef': {
-# 		'minWidth': 200,
-# 	},
-# 	'animateRows': True,
-# }).classes(remove='ag-theme-balham').classes('ag-theme-alpine-dark').style('height: 600px')  # .classes('flex-grow')
+rowData = [
+    {'orgHierarchy': ['A']},
+    {'orgHierarchy': ['A', 'B']},
+    {'orgHierarchy': ['C', 'D']},
+    {'orgHierarchy': ['E', 'F', 'G', 'H']},
+];
+def getDataPath(data):
+    return data.orgHierarchy
+def valueGetter(params):
+	if params.data:
+		return 'Provided'
+	return 'Filler'
 
 
-
+from tmp2 import rowData
+gridOptions = {
+    'columnDefs': [
+        # we're using the auto group column by default!
+        {'field': 'jobTitle'},
+        {'field': 'employmentType'},
+    ],
+    'defaultColDef': {
+        'flex': 1,
+    },
+    'autoGroupColumnDef': {
+        'headerName': 'Organisation Hierarchy',
+        'minWidth': 300,
+        'cellRendererParams': {
+            'suppressCount': True,
+        },
+    },
+    'rowData': rowData,
+    'treeData': True,  # enable Tree Data mode
+    'animateRows': True,
+    'groupDefaultExpanded': -1,  # expand all groups by default
+    'getDataPath': lambda data: data.orgHierarchy,
+};
+grid = ui.aggrid(gridOptions, theme='alpine-dark')
 
 with ui.row().classes('w-full no-wrap'):
 	ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow').style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')

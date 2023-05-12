@@ -1,41 +1,38 @@
+from typing import Dict
+
 from nicegui import ui
-def tmp(*args):
-	print(args)
+
+tab_names = ['A', 'B', 'C']
+
+# necessary until we improve native support for tabs (https://github.com/zauberzeug/nicegui/issues/251)
 
 
-label = ui.label('Choose File:')
+def switch_tab(msg: Dict) -> None:
+    name = msg['args']
+    tabs.props(f'model-value={name}')
+    panels.props(f'model-value={name}')
 
-def getDataPath(data):
-	return data.orgHierarchy;
+
+with ui.header().classes(replace='row items-center') as header:
+    ui.button(on_click=lambda: left_drawer.toggle()).props('flat color=white icon=menu')
+    with ui.element('q-tabs').on('update:model-value', switch_tab) as tabs:
+        for name in tab_names:
+            ui.element('q-tab').props(f'name={name} label={name}')
+
+with ui.footer(value=False) as footer:
+    ui.label('Footer')
+
+with ui.left_drawer().classes('bg-blue-100') as left_drawer:
+    ui.label('Side menu')
+
+with ui.page_sticky(position='bottom-right', x_offset=20, y_offset=20):
+    ui.button(on_click=footer.toggle).props('fab icon=contact_support')
 
 
-gridOptions = {
-	'columnDefs': [
-		{'field': 'group'},
-		{'field': 'jobTitle'},
-		{'field': 'employmentType'}
-	],
-	'autoGroupColumnDef': {
-		'headerName': "Group",
-		'width': 300,
-		'cellRendererParams': {
-			'suppressCount': True
-		}
-	},
-	'rowData': [
-		{'group': 'Erica', 'orgHierarchy': ['Erica'], 'jobTitle': "CEO", 'employmentType': "Permanent"},
-		{'group': 'Malcolm', 'orgHierarchy': ['Erica', 'Malcolm'], 'jobTitle': "VP", 'employmentType': "Permanent"}
-	],
-	'rowSelection': 'multiple',
-	'treeData': 1,
-	'animateRows': True,
-	# 'treeData': True,
-	'getDataPath': ['Erica', 'Malcolm']
-}
-grid = ui.aggrid(gridOptions, theme='alpine-dark')
+# the page content consists of multiple tab panels
+with ui.element('q-tab-panels').props('model-value=A animated').classes('w-full') as panels:
+    for name in tab_names:
+        with ui.element('q-tab-panel').props(f'name={name}').classes('w-full'):
+            ui.label(f'Content of {name}')
 
-with ui.row().classes('w-full no-wrap'):
-	ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow').style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
-	ui.button().props('square').style('width: 40px; height: 40px;')
-
-ui.run(dark=True, title='MangaRock 2.0')
+ui.run()

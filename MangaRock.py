@@ -50,17 +50,17 @@ class Works():  # works refer to all works of literature including books, anime,
 		import re, bs4
 		sites = {  # site:         find,   with,                       then find,       and get, split at, then get, render?; supported sites, might be outdated
 			'www.royalroad.com':  ('table', {'id':    'chapters'},           None, 'data-chapters', ' ',    0, False),  # based on absolute chapter count, not chapter name
-			'asura.gg':           ('span',  {'class': 'epcur epcurlast'},    None,            None, ' ',    1, False),
+			'www.asurascans.com':           ('span',  {'class': 'epcur epcurlast'},    None,            None, ' ',    1, False),
 			'www.webtoons.com':   ('ul',    {'id': '_listUl'},               'li',            'id', '_',   -1, False),
 			'mangabuddy.com':     ('div',   {'class': 'latest-chapters'},     'a',          'href', '-',   -1, False),
 			'mangapuma.com':      ('div',   {'id': 'chapter-list-inner'},     'a',          'href', '-',   -1, False),
 			'harimanga.com':      ('ul',    {'class': 'main version-chap no-volumn'}, 'a',  'href', '-|/', -2, False),
 			'zahard.xyz':         ('ul',    {'class': 'chapters'},            'a',          'href', '/',   -1, False),
 			'www.manga-raw.club': ('ul',    {'class': 'chapter-list'},        'a',          'href', '-|/', -4, False),
-			'bato.to':            ('span',  {'class': 'opacity-50'},      	 None,            None, ' ',     0, False),  # based on absolute chapter count, not chapter name
+			'bato.to':            ('span',  {'class': 'opacity-50'},        None,            None, ' ',     0, False),  # based on absolute chapter count, not chapter name
 			'manganato.com':      ('ul',    {'class': 'row-content-chapter'}, 'a',          'href', '-',   -1, False),
 			'comickiba.com':      ('li',    {'class': 'wp-manga-chapter'},    'a',          'href', '-|/', -2,  True)}
-		sites['flamescans.org'] = sites['asura.gg']
+		sites['flamescans.org'] = sites['www.asurascans.com']
 		sites['zinmanga.com'] = sites['harimanga.com']
 		sites['www.mcreader.net'] = sites['www.manga-raw.club']
 		sites['chapmanganato.com'] = sites['readmanganato.com'] = sites['manganato.com']
@@ -333,6 +333,7 @@ def get_lchs(link: str) -> list:
 	update_all(Works.all, pipe_enter)
 	return tmp.lChs
 
+
 if __name__ == '__main__':
-	# main()
-	print(get_lchs('https://bato.to/title/104579'))
+	main()
+	# print(get_lchs('https://bato.to/title/104579'))

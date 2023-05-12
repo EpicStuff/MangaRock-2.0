@@ -1,22 +1,15 @@
-themes: [awbreezedark, awbreeze] # options: awlight, awdark, awbreeze, awbreezedark,, list of themes to use in order of priority
+dark_mode: true # default: true
 font: [OCR A Extended, 8] # [font name, font size], default: [OCR A Extended, 8]
 hide_unupdated_works: true # default: true
 hide_works_with_no_links: true # default: true
 sort_by: score # defulat: score
-# unimplemented
-show_errors: false # default: false
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
 to_display: # culumns to display for each Type
     Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
-    Text: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
-default_column_width: 45 # default: 45
-window_size: [640, 360] # default: [640, 360]
-webbrowser_executable: C:/Program Files/Google/Chrome/Application/chrome.exe # default: C:/Program Files/Google/Chrome/Application/chrome.exe
-webbrowser_arg: --profile-directory="Default" "%l" # default: -profile-directory="Default" "%l"
-backup_directory: /backup # where to store backups for files, default: /backup
+    Text: {author: Author, nChs: New Chapters, chapter: Current Chapter, tags: Tags}
 # prettier-ignore
-sites: #site,           find,        with,                       then_find, and get,       split at, then get, render?
+sites: #site,                 find,  with,                       then_find, and get,       split at, then get, render?
     manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
     www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
     manhuascan.com:     &003 [div,   class: list-wrap,           a,         href,          '-',      -1,       false]

@@ -5,43 +5,33 @@ def tmp(*args):
 
 label = ui.label('Choose File:')
 
-rowData = [
-    {'orgHierarchy': ['A']},
-    {'orgHierarchy': ['A', 'B']},
-    {'orgHierarchy': ['C', 'D']},
-    {'orgHierarchy': ['E', 'F', 'G', 'H']},
-];
 def getDataPath(data):
-    return data.orgHierarchy
-def valueGetter(params):
-	if params.data:
-		return 'Provided'
-	return 'Filler'
+	return data.orgHierarchy;
 
 
-from tmp2 import rowData
 gridOptions = {
-    'columnDefs': [
-        # we're using the auto group column by default!
-        {'field': 'jobTitle'},
-        {'field': 'employmentType'},
-    ],
-    'defaultColDef': {
-        'flex': 1,
-    },
-    'autoGroupColumnDef': {
-        'headerName': 'Organisation Hierarchy',
-        'minWidth': 300,
-        'cellRendererParams': {
-            'suppressCount': True,
-        },
-    },
-    'rowData': rowData,
-    'treeData': True,  # enable Tree Data mode
-    'animateRows': True,
-    'groupDefaultExpanded': -1,  # expand all groups by default
-    'getDataPath': lambda data: data.orgHierarchy,
-};
+	'columnDefs': [
+		{'field': 'group'},
+		{'field': 'jobTitle'},
+		{'field': 'employmentType'}
+	],
+	'autoGroupColumnDef': {
+		'headerName': "Group",
+		'width': 300,
+		'cellRendererParams': {
+			'suppressCount': True
+		}
+	},
+	'rowData': [
+		{'group': 'Erica', 'orgHierarchy': ['Erica'], 'jobTitle': "CEO", 'employmentType': "Permanent"},
+		{'group': 'Malcolm', 'orgHierarchy': ['Erica', 'Malcolm'], 'jobTitle': "VP", 'employmentType': "Permanent"}
+	],
+	'rowSelection': 'multiple',
+	'treeData': 1,
+	'animateRows': True,
+	# 'treeData': True,
+	'getDataPath': ['Erica', 'Malcolm']
+}
 grid = ui.aggrid(gridOptions, theme='alpine-dark')
 
 with ui.row().classes('w-full no-wrap'):

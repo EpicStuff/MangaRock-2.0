@@ -57,7 +57,7 @@ class Works():  # works refer to all works of literature including books, anime,
 			'harimanga.com':      ('ul',    {'class': 'main version-chap no-volumn'}, 'a',  'href', '-|/', -2, False),
 			'zahard.xyz':         ('ul',    {'class': 'chapters'},            'a',          'href', '/',   -1, False),
 			'www.manga-raw.club': ('ul',    {'class': 'chapter-list'},        'a',          'href', '-|/', -4, False),
-			'bato.to':            ('span',  {'class': 'opacity-50'},        None,            None, ' ',     0, False),  # based on absolute chapter count, not chapter name
+			'bato.to':            ('item',  None,                           'title',          None, ' ',   -1, False),
 			'manganato.com':      ('ul',    {'class': 'row-content-chapter'}, 'a',          'href', '-',   -1, False),
 			'comickiba.com':      ('li',    {'class': 'wp-manga-chapter'},    'a',          'href', '-|/', -2,  True)}
 		sites['flamescans.org'] = sites['www.asurascans.com']
@@ -76,6 +76,9 @@ class Works():  # works refer to all works of literature including books, anime,
 
 		for num, link in enumerate(self.links):  # for each link
 			site = link.split('/')[2]
+
+			# tmp
+			if site == 'bato.to': link = link.replace('title/', 'rss/series/') + '.xml'
 
 			if site in sites:  # if site is supported
 				try: link = await session.get(link)  # connecting to the site

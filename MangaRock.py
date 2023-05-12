@@ -1,7 +1,8 @@
 # Version: 3.3.1
 # okay, heres the plan, make links its own separate object and have the links update individualy. when the updates, it will then update its parent's display
 import os, sys, inspect
-
+from nicegui import ui
+from typing import Callable
 
 class Type():  # type represents the type of object things are, eg: authors, books, website, ...
 	''' Base Type class to be inherited by subclasses to give custom properties\n
@@ -77,8 +78,6 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 	def __iter__(self) -> object: return self  # required for to iter over
 	def __str__(self) -> str: return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'  # returns self in str format
 	def __repr__(self) -> str: return f'<{self.name}>'  # represent self as self.name between <>
-
-
 class Fandom(Type): all = {}; prop = {'name': None, 'tags': [], 'children': []}
 class Author(Type): all = {}; prop = {'name': None, 'links': [], 'works': [], 'score': None, 'tags': []}
 class Series(Type): all = {}; prop = {'name': None, 'links': [], 'author': None, 'works': [], 'fandom': [], 'score': None, 'tags': []}
@@ -89,50 +88,37 @@ class Link(Type):   all = {}; prop = {'name': None, 'site': None}
 
 
 default_settings = '''
-themes: [awbreezedark, awbreeze] # options: awlight, awdark, awbreeze, awbreezedark,, list of themes to use in order of priority
-font: [OCR A Extended, 8] # [font name, font size], default: [OCR A Extended, 8]
-hide_unupdated_works: true # default: true
-hide_works_with_no_links: true # default: true
-sort_by: score # defulat: score
-# unimplemented
-show_errors: false # default: false
-# prettier-ignore
-scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
-to_display: # culumns to display for each Type
-    Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
-    Text:  {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
-default_column_width: 45 # default: 45
-window_size: [640, 360] # default: [640, 360]
-webbrowser_executable: C:/Program Files/Google/Chrome/Application/chrome.exe # default: C:/Program Files/Google/Chrome/Application/chrome.exe
-webbrowser_arg: --profile-directory="Default" "%l" # default: -profile-directory="Default" "%l"
-backup_directory: /backup # where to store backups for files, default: /backup
-# prettier-ignore
-sites: #site,           find,        with,                       then_find, and get,       split at, then get, render?
-    manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
-    www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
-    manhuascan.com:     &003 [div,   class: list-wrap,           a,         href,          '-',      -1,       false]
-    zahard.xyz:         &004 [ul,    class: chapters,            a,         href,          /,        -1,       false]
-    www.royalroad.com:  &005 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]
-    1stkissmanga.io:    &006 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       false]
-    comickiba.com:      &007 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       true]
-    asura.gg:           &008 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
-    mangapuma.com:      &009 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
-    bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
-    www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
-    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011] # for formatting reasons
-    chapmanganato.com:  *001
-    readmanganato.com:  *001
-    nitroscans.com:     *007
-    anshscans.org:      *007
-    flamescans.org:     *008
-    www.mcreader.net:   *011'''
-
-def main(null, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml', *args):
-	del null; os.chdir(dir)
-	settings = load_settings(settings_file, default_settings)
-	gui = GUI(settings, dir)
-	file = gui.mode_loading(settings)
-
+	dark_mode: true # default: true
+	font: [OCR A Extended, 8] # [font name, font size], default: [OCR A Extended, 8]
+	hide_unupdated_works: true # default: true
+	hide_works_with_no_links: true # default: true
+	sort_by: score # defulat: score
+	# prettier-ignore
+	scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
+	to_display: # culumns to display for each Type
+		Manga: {nChs: New Chapters, chapter: Current Chapter, tags: Tags}
+		Text: {author: Author, nChs: New Chapters, chapter: Current Chapter, tags: Tags}
+	# prettier-ignore
+	sites: #site,                 find,  with,                       then_find, and get,       split at, then get, render?
+		manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
+		www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
+		manhuascan.com:     &003 [div,   class: list-wrap,           a,         href,          '-',      -1,       false]
+		zahard.xyz:         &004 [ul,    class: chapters,            a,         href,          /,        -1,       false]
+		www.royalroad.com:  &005 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]
+		1stkissmanga.io:    &006 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       false]
+		comickiba.com:      &007 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       true]
+		asura.gg:           &008 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+		mangapuma.com:      &009 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
+		bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
+		www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+		null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011] # for formatting reasons
+		chapmanganato.com:  *001
+		readmanganato.com:  *001
+		nitroscans.com:     *007
+		anshscans.org:      *007
+		flamescans.org:     *008
+		www.mcreader.net:   *011
+'''
 
 def load_settings(settings_file: str, default_settings: str) -> dict:
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
@@ -151,7 +137,7 @@ def load_settings(settings_file: str, default_settings: str) -> dict:
 		with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
 
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
-	settings = yaml.load(default_settings)  # set default_settings
+	settings = yaml.load(default_settings.replace('\t', ''))  # set default_settings
 	try: file = open(settings_file, 'r'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
 	except FileNotFoundError as e: print(e)  # except: print error
 	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
@@ -166,6 +152,47 @@ def load_file(file: str) -> str:
 	with open(file, 'r') as file:
 		json.load(file, object_hook=lambda kwargs: add_work(**kwargs))
 		return file.rstrip('.json')
+def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml', *args):
+	def open_file(gui: GUI, file: dict) -> None:
+		file = file['args']['data']['name']
+
+	os.chdir(dir)
+	settings = load_settings(settings_file, default_settings)
+	gui = GUI(settings, dir)
+	files = [{'num': f'{num}.', 'name': file.split('.json')[0]} for num, file in enumerate([file for file in os.listdir() if file[-5:] == '.json'])]
+	gui.mode_loading(files, open_file)
+	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.py'))
+
+
+class GUI():
+	def __init__(self, settings: dict, dir: str) -> None:
+		ui.query('div').style('gap: 0')
+		with ui.tabs().props('dense') as self.tabs:
+			ui.tab('Main')
+		self.tab_panels = ui.tab_panels(self.tabs, value='Main')
+	def mode_loading(self, files: list, func: Callable) -> None:
+		with self.tab_panels:
+			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+				ui.label('Choose File: ')
+				gridOptions = {
+					'defaultColDef': {
+						'resizable': True,
+						'suppressMenu': True,
+					},
+					'columnDefs': [
+						{'headerName': '', 'field': 'num', 'width': 16, 'minWidth': 8, 'maxWidth': 48},
+						{'headerName': 'Name', 'field': 'name', 'resizable': False},
+					],
+					'rowData': files,
+				}
+				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func(self, event))
+				with ui.row().classes('w-full'):
+					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
+					ui.button().props('square').style('width: 40px; height: 40px;')
+
+
+if __name__ in {"__main__", "__mp_main__"}:
+	main(*sys.argv)
 
 
 class GUI():
@@ -180,6 +207,7 @@ class GUI():
 				elif entry_input == 'reupdate': threading.Thread(target=update_all, args=(Works.all,), daemon=True).start()  # if command is reupdate: re-update_all works
 				elif entry_input == 'exit': root.destroy(); sys.exit()  # if command is exit: exit without saving
 				else:  # if not command
+
 					try: print(eval(entry_input, globals(), locals()))  # try and print eval input
 					except Exception:  # if can't eval
 						try: print(exec(entry_input, globals(), locals()))  # try and print exec input
@@ -241,31 +269,26 @@ class GUI():
 			subclass.format()  # connect works to series to authors to fandoms, etc. not yet implemented
 		return file
 
+def update_all(works: list | tuple, pipe_enter, settings) -> None:
+	'updates all works provided'
+	import asyncio
+	from requests_html import AsyncHTMLSession
+	updaters, renderers = asyncio.Semaphore(settings['total_updaters']), asyncio.Semaphore(settings['total_renderers'])
 
+	async def update_each(num, work, session):
+		async with updaters:
+			pipe_enter.send((num, await work.update(session, renderers)))
 
-if __name__ == '__main__':
-	main(*sys.argv)
+	async def a_main(): session = AsyncHTMLSession(); await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
 
-# def update_all(works: list | tuple, pipe_enter, settings) -> None:
-# 	'updates all works provided'
-# 	import asyncio
-# 	from requests_html import AsyncHTMLSession
-# 	updaters, renderers = asyncio.Semaphore(settings['total_updaters']), asyncio.Semaphore(settings['total_renderers'])
+	asyncio.run(a_main())
 
-# 	async def update_each(num, work, session):
-# 		async with updaters:
-# 			pipe_enter.send((num, await work.update(session, renderers)))
-
-# 	async def a_main(): session = AsyncHTMLSession(); await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
-
-# 	asyncio.run(a_main())
-
-# 	# try:
-# 	# 	if self.links == []: raise TypeError  # if no links
-# 	# except TypeError as e: self.lChs.append((-1, -5, e)); return self.lChs  # then return -5 error "code"
-# 	# try:
-# 	# 	if ('do not check for updates' in self.tags) or ('Complete' in self.tags and 'Read' in self.tags) or ('Complete' in self.tags and 'Oneshot' in self.tags): self.lChs.append((-1, -6)); return self.lChs
-# 	# except TypeError as e: print(e)  # then pass
+	# try:
+	# 	if self.links == []: raise TypeError  # if no links
+	# except TypeError as e: self.lChs.append((-1, -5, e)); return self.lChs  # then return -5 error "code"
+	# try:
+	# 	if ('do not check for updates' in self.tags) or ('Complete' in self.tags and 'Read' in self.tags) or ('Complete' in self.tags and 'Oneshot' in self.tags): self.lChs.append((-1, -6)); return self.lChs
+	# except TypeError as e: print(e)  # then pass
 
 
 # import json, itertools, subprocess; from multiprocessing import Process, Pipe

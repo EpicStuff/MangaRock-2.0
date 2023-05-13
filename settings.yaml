@@ -5,6 +5,8 @@ row_height: 32
 to_display: # culumns to display for each Type, do not include name (it's required and auto included)
     Manga: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
     example: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+workers: 3
+renderers: 1
 hide_unupdated_works: true # default: true
 hide_works_with_no_links: true # default: true
 sort_by: score # defulat: score

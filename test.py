@@ -1,38 +1,44 @@
-from typing import Dict
-
 from nicegui import ui
-
-tab_names = ['A', 'B', 'C']
-
-# necessary until we improve native support for tabs (https://github.com/zauberzeug/nicegui/issues/251)
+import asyncio, random
 
 
-def switch_tab(msg: Dict) -> None:
-    name = msg['args']
-    tabs.props(f'model-value={name}')
-    panels.props(f'model-value={name}')
+c = False
 
+async def tmp(event):
+	# grid.options['rowData'][0]['age'] = random.randint(0, 100)
+	# grid.call_api_method('refreshCells')
+	# grid.update()
+	# await ui.run_javascript('document.getElementById(6).class="test"', respond=False)
+	global c
 
-with ui.header().classes(replace='row items-center') as header:
-    ui.button(on_click=lambda: left_drawer.toggle()).props('flat color=white icon=menu')
-    with ui.element('q-tabs').on('update:model-value', switch_tab) as tabs:
-        for name in tab_names:
-            ui.element('q-tab').props(f'name={name} label={name}')
+	a = [
+		{'name': 'Alice', 'age': 99},
+		{'name': 'Bob', 'age': 21},
+		{'name': 'Carol', 'age': 42},]
+	b = [
+		{'name': 'Alice', 'age': 1},
+		{'name': 'Carol', 'age': 99},]
 
-with ui.footer(value=False) as footer:
-    ui.label('Footer')
+	c = not c
+	print(c)
+	if c: grid.call_api_method('setRowData', a)
+	else: grid.call_api_method('setRowData', b)
 
-with ui.left_drawer().classes('bg-blue-100') as left_drawer:
-    ui.label('Side menu')
+grid = ui.aggrid({
+	'columnDefs': [
+		{'headerName': 'Name', 'field': 'name'},
+		{'headerName': 'Age', 'field': 'age'},
+	],
+	'rowData': [
+		{'name': 'Alice', 'age': 18},
+		{'name': 'Bob', 'age': 21},
+		{'name': 'Carol', 'age': 42},
+	],
+	'defaultColDef': {
+		'editable': True,
+            },
+}, theme='alpine-dark')
 
-with ui.page_sticky(position='bottom-right', x_offset=20, y_offset=20):
-    ui.button(on_click=footer.toggle).props('fab icon=contact_support')
+ui.button('Test', on_click=tmp)
 
-
-# the page content consists of multiple tab panels
-with ui.element('q-tab-panels').props('model-value=A animated').classes('w-full') as panels:
-    for name in tab_names:
-        with ui.element('q-tab-panel').props(f'name={name}').classes('w-full'):
-            ui.label(f'Content of {name}')
-
-ui.run()
+ui.run(dark=True)

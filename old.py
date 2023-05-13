@@ -122,8 +122,11 @@ def update_all(works: list | tuple, pipe_enter) -> None:
 	import asyncio
 	from requests_html import AsyncHTMLSession
 
-	async def update_each(num, work, session): pipe_enter.send((num, await work.update(session)))
-	async def a_main(): session = AsyncHTMLSession(); await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
+	async def update_each(num, work, session):
+		pipe_enter.send((num, await work.update(session)))
+	async def a_main():
+		session = AsyncHTMLSession()
+		await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
 
 	asyncio.run(a_main(), debug=False)
 

@@ -8,7 +8,6 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 	''' Base Type class to be inherited by subclasses to give custom properties\n
 	Custom Book class Example: `class Book(Type): all = {}; prop = {'name': None, 'author': None, 'score': None, 'tags': []}`'''
 	prop = {'name': None}; all = []  # prop is short for properties, dict provided by sub object; all = list of all loaded obj/works of this class, eg = incase user wishes to iterate through all books
-
 	def __init__(self, *args: list, **kwargs: dict) -> None:
 		'''Applies args and kwargs to `self.__dict__` if kwarg is in `self.prop`'''
 		kwargs.update({tuple(self.prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in {'', None, *kwargs.values()}})  # convert args into kwargs and update them to kwargs
@@ -24,6 +23,9 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 				if self.prop[key].__class__ is int and val.__class__ is not float: val = float(val)  # if default val is float and given val is not float then float given val
 				self.__dict__.update({key: val})  # change self property value to given kwarg value
 
+		if 'links' in self.prop:
+			for num, link in enumerate(self.links):
+				self.links[num] = Link(link)
 	@classmethod
 	def sort(cls, sort_by: str = 'name', look_up_table: dict = None, reverse: bool = True) -> None:
 		'''sort `cls.all` by given dict, defaults to name'''
@@ -38,15 +40,18 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 			else:
 				cls.all = dict(sorted(cls.all.items(), lambda work: look_up_table[work[1].__dict__[sort_by]], reverse=reverse))  # for each work in class.all get work.score and convert into number through look up table
 	@classmethod
-	def format(cls, base):
-		for prop in cls.__dict__:
-			if prop.__class__ is list and prop != 'tags':
-				for num, obj in enumerate(prop):
-					try:
-						prop[num] = eval(obj)
-					except Exception as e: print('Type.format:', e)
-
-	async def update(self, session, sites: dict) -> int | Exception:
+	def __iter__(self) -> object: return self  # required for to iter over
+	def __str__(self) -> str: return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'  # returns self in str format
+	def __repr__(self) -> str: return f'<{self.name}>'  # represent self as self.name between <>
+class Manga(Type):  all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
+class Anime(Type):  all = {}; prop = {'name': None, 'links': [], 'episode': 0, 'series': None, 'score': None, 'tags': []}
+class Text(Type):   all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'fandom': None, 'author': None, 'series': None, 'score': None, 'tags': []}
+class Link():
+	def __init__(self, link: str) -> None:
+		self.site = link.split('/')[2]
+		self.link = link
+		self.latest = ''
+	async def update(self, session, renderers, sites: dict) -> int | Exception:
 		''' Finds latest chapter from `name` then appends result or an error code to `chs`
 		# Error Codes:
 			1. -1 = site not supported
@@ -57,11 +62,12 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 
 		if self.site not in sites: self.chs = -1; return  # if site not is supported, set error code, return
 		try: link = await session.get(link)  # connecting to the site
-		except Exception as e: self.chs = -4; return e  # connection error
+		except Exception as e: self.chs = -2; return e  # connection error
 		try:
 			if sites[self.site][6]:  # if needs to be rendered
 				if __debug__: print('rendering', self.name, '-', self.site)
-				await link.html.arender(retries=2, wait=1, sleep=2, timeout=20, reload=True)
+				with renderers:
+					await link.html.arender(retries=2, wait=1, sleep=2, timeout=20, reload=True)
 				if __debug__: print('done rendering', self.name, '-', self.site)
 		except Exception as e: print('failed to render: ', self.name, ' - ', self.site, ', ', e, sep=''); self.chs = -7; return e
 		else:
@@ -75,16 +81,6 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 
 		self.lChs.sort(key=lambda lChs: lChs[1], reverse=True)  # sort latest chapters based on lastest chapter
 		return self.lChs
-	def __iter__(self) -> object: return self  # required for to iter over
-	def __str__(self) -> str: return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'  # returns self in str format
-	def __repr__(self) -> str: return f'<{self.name}>'  # represent self as self.name between <>
-class Fandom(Type): all = {}; prop = {'name': None, 'tags': [], 'children': []}
-class Author(Type): all = {}; prop = {'name': None, 'links': [], 'works': [], 'score': None, 'tags': []}
-class Series(Type): all = {}; prop = {'name': None, 'links': [], 'author': None, 'works': [], 'fandom': [], 'score': None, 'tags': []}
-class Manga(Type):  all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
-class Anime(Type):  all = {}; prop = {'name': None, 'links': [], 'episode': 0, 'series': None, 'score': None, 'tags': []}
-class Text(Type):   all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'fandom': None, 'author': None, 'series': None, 'score': None, 'tags': []}
-class Link(Type):   all = {}; prop = {'name': None, 'site': None}
 
 
 default_settings = '''
@@ -95,6 +91,8 @@ row_height: 32
 to_display: # culumns to display for each Type, do not include name (it's required and auto included)
     Manga: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
     example: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+workers: 3
+renderers: 1
 hide_unupdated_works: true # default: true
 hide_works_with_no_links: true # default: true
 sort_by: score # defulat: score
@@ -121,75 +119,83 @@ sites: #site,                 find,  with,                       then_find, and 
     flamescans.org:     *008
     www.mcreader.net:   *011
 '''
-
-def load_settings(settings_file: str, default_settings: str) -> dict:
-	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
-		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
-		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
-		i = 0; adding = set(); done = set()
-		while len(done) != len(file[start:]):  # while not all lines have been formatted
-			if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
-			for num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
-				if line[0:9] == '    null:': done.add(num)
-				if num in done: continue  # skip completed lines
-				if line[i] == '\n': done.add(num)  # add line's index to done when it reaches the end
-				elif num in adding and line[i + 1] != ' ': file[num] = line[0:i] + ' ' + line[i:]  # if line is in adding and next char is not ' ' then add space into line at i
-				elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(num)  # if elm endpoint is reached, add line into adding
-			i += 1  # increase column counter
-		with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
-
-	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
-	settings = yaml.load(default_settings.replace('\t', ''))  # set default_settings
-	try: file = open(settings_file, 'r'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
-	except FileNotFoundError as e: print(e)  # except: print error
-	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
-	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
 def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml', *args):
 	import asyncio
+	def load_settings(settings_file: str, default_settings: str) -> dict:
+		def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
+			with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
+			start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
+			i = 0; adding = set(); done = set()
+			while len(done) != len(file[start:]):  # while not all lines have been formatted
+				if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
+				for num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
+					if line[0:9] == '    null:': done.add(num)
+					if num in done: continue  # skip completed lines
+					if line[i] == '\n': done.add(num)  # add line's index to done when it reaches the end
+					elif num in adding and line[i + 1] != ' ': file[num] = line[0:i] + ' ' + line[i:]  # if line is in adding and next char is not ' ' then add space into line at i
+					elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(num)  # if elm endpoint is reached, add line into adding
+				i += 1  # increase column counter
+			with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
+
+		import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
+		settings = yaml.load(default_settings.replace('\t', ''))  # set default_settings
+		try: file = open(settings_file, 'r'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
+		except FileNotFoundError as e: print(e)  # except: print error
+		with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
+		format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
 	def enter_reading_mode_for_file(gui: GUI, file: dict) -> None:
-		def load_file(file: str) -> None:
+		def load_file(file: str) -> list:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			def add_work(format: str | Type, *args, **kwargs) -> Type:
 				'formats `Type` argument and returns the created object'
 				if format.__class__ is str: format = eval(format)  # if the format is a string, turn in into an object
 				return format(*args, **kwargs)  # return works object
 
-			import json
-			with open(file, 'r') as f:
-				json.load(f, object_hook=lambda kwargs: add_work(**kwargs))
-			return file.rstrip('.json')
+			with open(file, 'r') as file:
+				import json
+				return json.load(file, object_hook=lambda kwargs: add_work(**kwargs))
 
-		file = load_file(file['args']['data']['name'] + '.json')
-		cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
-		try:
-			for key, val in settings['to_display'][file].items():  # todo: maybe turn into list comprehension
-				cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': settings['default_column_width']})
-		except KeyError as e: print('Columns for', e, 'has not been specified in settings.yaml'); raise Exception  # todo: setup default columns instead of crash
-		cols[-1]['resizable'] = False
-		works = []
-		for work in Type.all:
-			for link in work.links:
-				works.append({'name': work.name, 'link': link, 'chapter': work.chapter, 'tags': work.tags},)
-		gui.mode_reading(file, cols, works, lambda *args: print('selected events:', args), lambda self: update_all(self, Type.all))
+		file = file['args']['data']['name']
+		if file in gui.open_tabs:
+			gui.switch_tab({'args': file})
+		else:
+			cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
+			try:
+				for key, val in settings['to_display'][file].items():  # todo: maybe turn into list comprehension
+					cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': settings['default_column_width']})
+			except KeyError as e: print('Columns for', e, 'has not been specified in settings.yaml'); raise Exception  # todo: setup default columns instead of crash
+			cols[-1]['resizable'] = False
+
+			gui.open_tabs[file] = load_file(file + '.json')
+			works = []
+			for work in gui.open_tabs[file]:
+				for link in work.links:
+					works.append({'name': work.name, 'link': link.link, 'chapter': work.chapter, 'tags': work.tags},)
+			gui.mode_reading(file, cols, works, lambda *args: print('selected events:', args), lambda self: update_all(self, Type.all))
 	def update_all(gui: GUI, works: list | tuple) -> None:
 		'updates all works provided'
 		import asyncio
 		from requests_html import AsyncHTMLSession
-		updaters, renderers = asyncio.Semaphore(settings['total_updaters']), asyncio.Semaphore(settings['total_renderers'])
 
-		async def update_each(num, work, session):
-			async with updaters:
-				pipe_enter.send((num, await work.update(session, renderers)))
+		async def update_each(work, session):
+			if 'links' in work.prop:
+				for link in work.links:
+					async with workers:
+						await link.update(session, renderers, settings['sites'])
+		async def async_main():
+			session = AsyncHTMLSession()
+			await asyncio.gather(*[update_each(work, session) for work in works])
 
-		async def a_main(): session = AsyncHTMLSession(); await asyncio.gather(*[update_each(num, work, session) for num, work in enumerate(works)])
+		workers, renderers = asyncio.Semaphore(settings['workers']), asyncio.Semaphore(settings['renderers'])
+		print('updating all')
+		asyncio.run(async_main())
 
-		asyncio.run(a_main())
-
-	os.chdir(dir)
-	settings = load_settings(settings_file, default_settings)
-	gui = GUI(settings)
-	files = [{'name': file.split('.json')[0]} for file in os.listdir() if file[-5:] == '.json']
-	gui.mode_loading(files, enter_reading_mode_for_file)
+	os.chdir(dir)  # change working directory to where file is located unless specified otherwise
+	settings = load_settings(settings_file, default_settings)  # load settings
+	gui = GUI(settings)  # setup gui
+	gui.mode_loading([{'name': file.split('.json')[0]} for file in os.listdir() if file[-5:] == '.json'], enter_reading_mode_for_file)
+	# enter_reading_mode_for_file gets called by gui.mode_loading when a file is selected
+	# update_all gets called by enter_reading_mode_for_file once it its done
 	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
 
 
@@ -199,11 +205,14 @@ class GUI():
 		with ui.tabs().props('dense') as self.tabs:
 			ui.tab('Main')
 		self.tab_panels = ui.tab_panels(self.tabs, value='Main')
-		self.open_tabs = {'Main', }
+		self.open_tabs = {'Main': None}
 		self.settings = settings
+	def switch_tab(self, event: dict):
+		self.tabs.props(f'model-value={event["args"]}')
+		self.tab_panels.props(f'model-value={event["args"]}')
 	def mode_loading(self, files: list, func_select: Callable) -> None:
 		with self.tab_panels:
-			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):  # create main tab panel
 				ui.label('Choose File: ')
 				gridOptions = {
 					'defaultColDef': {
@@ -222,18 +231,11 @@ class GUI():
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 					ui.button().props('square').style('width: 40px; height: 40px;')
 	def mode_reading(self, file: str, columnDefs: list, rowData: list, func_select: Callable, func_done: Callable) -> None:
-		def switch_tab(event: dict):
-			self.tabs.props(f'model-value={event["args"]}')
-			self.tab_panels.props(f'model-value={event["args"]}')
-
-		self.tabs.on('update:model-value', switch_tab)
-		if file not in self.open_tabs:
-			# create new tab if tab does not already exist
-			with self.tabs:
-				ui.tab(file)
-			self.open_tabs.add(file)
+		self.tabs.on('update:model-value', self.switch_tab)
+		with self.tabs:
+			ui.tab(file)
 		# switch to (newly created) tab
-		switch_tab({'args': file})
+		self.switch_tab({'args': file})
 		# populate tab panel
 		with self.tab_panels:
 			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):

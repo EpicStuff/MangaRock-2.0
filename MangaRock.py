@@ -1,6 +1,6 @@
 # Version: 3.3.1
 # okay, heres the plan, make links its own separate object and have the links update individualy. when the updates, it will then update its parent's display
-import os, sys, inspect
+import os
 from nicegui import ui
 from typing import Callable
 
@@ -263,4 +263,5 @@ class GUI():
 
 
 if __name__ in {"__main__", "__mp_main__"}:
+	import sys
 	main(*sys.argv)

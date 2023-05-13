@@ -51,36 +51,50 @@ class Link():
 		self.site = link.split('/')[2]
 		self.link = link
 		self.latest = ''
-	async def update(self, session, renderers, sites: dict) -> int | Exception:
-		''' Finds latest chapter from `name` then appends result or an error code to `chs`
-		# Error Codes:
-			1. -1 = site not supported
-			2. -2 = Connection Error
-			3. -3 = failed to render link, probably timeout
-			4. -4 = parsing error'''
-		import re, bs4
+	async def update(self, asession, renderers, sites: dict) -> int | Exception:
+		'Finds latest chapter from `self.link` then sets result or an error code to `self.latest`'
+		import re, bs4;
 
-		if self.site not in sites: self.chs = -1; return  # if site not is supported, set error code, return
-		try: link = await session.get(link)  # connecting to the site
-		except Exception as e: self.chs = -2; return e  # connection error
+		import time
+		time.sleep(3)
+
+		if self.site not in sites:
+			self.latest = Exception('site not supported')  # site not supported
+			return
+
+		try:
+			link = await asession.get(link)  # connecting to the site
+		except Exception as e:  # connection error
+			self.chs = e
+			return
+
 		try:
 			if sites[self.site][6]:  # if needs to be rendered
-				if __debug__: print('rendering', self.name, '-', self.site)
+				if __debug__: print('rendering', self.link, '-', self.site)
 				with renderers:
 					await link.html.arender(retries=2, wait=1, sleep=2, timeout=20, reload=True)
-				if __debug__: print('done rendering', self.name, '-', self.site)
-		except Exception as e: print('failed to render: ', self.name, ' - ', self.site, ', ', e, sep=''); self.chs = -7; return e
-		else:
-			try:
-				link = bs4.BeautifulSoup(link.html.html, 'html.parser')  # link = bs4 object with link html
-				if (sites[self.site][2] is None) and (sites[self.site][3] is None): link = link.find(sites[self.site][0], sites[self.site][1]).contents[0]  # if site does not require second find and the contents are desired: get contents of first tag with specified requirements
-				elif sites[self.site][2] is None: link = link.find(sites[self.site][0], sites[self.site][1]).get(sites[self.site][3])  # if site does not require second find and tag attribute is desired: get specified attribute of first tag with specified attribute
-				else: link = link.find(sites[self.site][0], sites[self.site][1]).find(sites[self.site][2]).get(sites[self.site][3])  # else: get specified attribute of first specified tag under the first tag with specified attribute
-			except AttributeError as e: self.chs = -1; return e  # else there was a parsing error: append link index with error code to lChs
-			else: self.chs = float(re.split(sites[self.site][4], link)[sites[self.site][5]])  # else link parsing went fine: extract latest chapter from link using lookup table
+				if __debug__: print('done rendering', self.link, '-', self.site)
+		except Exception as e:
+			print('failed to render: ', self.name, ' - ', self.site, ', ', e, sep='')  # render error
+			self.latest = e
+			return
 
-		self.lChs.sort(key=lambda lChs: lChs[1], reverse=True)  # sort latest chapters based on lastest chapter
-		return self.lChs
+		try:
+			link = bs4.BeautifulSoup(link.html.html, 'html.parser')  # link = bs4 object with link html
+			if (sites[self.site][2] is None) and (sites[self.site][3] is None):
+				link = link.find(sites[self.site][0], sites[self.site][1]).contents[0]  # if site does not require second find and the contents are desired: get contents of first tag with specified requirements
+			elif sites[self.site][2] is None:
+				link = link.find(sites[self.site][0], sites[self.site][1]).get(sites[self.site][3])  # if site does not require second find and tag attribute is desired: get specified attribute of first tag with specified attribute
+			else:
+				link = link.find(sites[self.site][0], sites[self.site][1]).find(sites[self.site][2]).get(sites[self.site][3])  # else: get specified attribute of first specified tag under the first tag with specified attribute
+		except AttributeError as e:
+			self.latest = e  # parsing error
+			return
+
+		try:
+			self.latest = float(re.split(sites[self.site][4], link)[sites[self.site][5]])  # else link parsing went fine: extract latest chapter from link using lookup table
+		except Exception as e:
+			self.latest = e  # whatever was extracted was not a number
 
 
 default_settings = '''
@@ -143,7 +157,7 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 		except FileNotFoundError as e: print(e)  # except: print error
 		with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
 		format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
-	def enter_reading_mode_for_file(gui: GUI, file: dict) -> None:
+	def enter_reading_mode_for_file(file: dict) -> None:
 		def load_file(file: str) -> list:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			def add_work(format: str | Type, *args, **kwargs) -> Type:
@@ -171,32 +185,43 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 			for work in gui.open_tabs[file]:
 				for link in work.links:
 					works.append({'name': work.name, 'link': link.link, 'chapter': work.chapter, 'tags': work.tags},)
-			gui.mode_reading(file, cols, works, lambda *args: print('selected events:', args), lambda self: update_all(self, Type.all))
-	def update_all(gui: GUI, works: list | tuple) -> None:
+			gui.mode_reading(file, cols, works, lambda *args: print('selected events:', args))
+
+			# update_all(gui.open_tabs[file])
+	def update_all(works: list | tuple) -> None:
 		'updates all works provided'
-		import asyncio
 		from requests_html import AsyncHTMLSession
 
-		async def update_each(work, session):
+		async def update_each(work, session, pipe):
 			if 'links' in work.prop:
 				for link in work.links:
 					async with workers:
+						if __debug__: print('updating', link.link, '-', link.site)
 						await link.update(session, renderers, settings['sites'])
-		async def async_main():
+						if __debug__: print('done updating', link.link, '-', link.site)
+					pass  # todo: update link in gui
+				pass  # todo: get latest chapter from gui
+				if settings['hide_unupdated_works']: pass  # todo: hide works with no updates in gui
+				pass  # todo: sort links and update gui
+			elif settings['hide_works_with_no_links']: pass  # todo: hide works with no links in gui
+		async def async_main(pipe):
 			session = AsyncHTMLSession()
-			await asyncio.gather(*[update_each(work, session) for work in works])
+			await asyncio.gather(*[update_each(work, session, pipe) for work in works])
 
-		workers, renderers = asyncio.Semaphore(settings['workers']), asyncio.Semaphore(settings['renderers'])
-		print('updating all')
-		asyncio.run(async_main())
+		from multiprocessing import Process, Pipe
+		pipe_exit, pipe_enter = Pipe(False)
+		Process(target=asyncio.run, args=(async_main(pipe_enter), ), daemon=True).start()
+	def update_grid():
+		gui.grid
 
 	os.chdir(dir)  # change working directory to where file is located unless specified otherwise
 	settings = load_settings(settings_file, default_settings)  # load settings
+	workers, renderers = asyncio.Semaphore(settings['workers']), asyncio.Semaphore(settings['renderers'])
 	gui = GUI(settings)  # setup gui
 	gui.mode_loading([{'name': file.split('.json')[0]} for file in os.listdir() if file[-5:] == '.json'], enter_reading_mode_for_file)
 	# enter_reading_mode_for_file gets called by gui.mode_loading when a file is selected
 	# update_all gets called by enter_reading_mode_for_file once it its done
-	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
+	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'))
 
 
 class GUI():
@@ -226,11 +251,11 @@ class GUI():
 					'rowHeight': self.settings['row_height'],
 					# 'rowStyle': {'margin-top': '-4px'}  # not doing anything
 				}
-				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func_select(self, event))
+				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', func_select)
 				with ui.row().classes('w-full'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 					ui.button().props('square').style('width: 40px; height: 40px;')
-	def mode_reading(self, file: str, columnDefs: list, rowData: list, func_select: Callable, func_done: Callable) -> None:
+	def mode_reading(self, file: str, columnDefs: list, rowData: list, func_select: Callable) -> None:
 		self.tabs.on('update:model-value', self.switch_tab)
 		with self.tabs:
 			ui.tab(file)
@@ -261,9 +286,10 @@ class GUI():
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
 					ui.button().props('square').style('width: 40px; height: 40px;')
 
-		func_done(self)
-
 
 if __name__ in {"__main__", "__mp_main__"}:
+	import tracemalloc
+	tracemalloc.start()
+
 	import sys
 	main(*sys.argv)

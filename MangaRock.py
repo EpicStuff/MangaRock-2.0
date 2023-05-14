@@ -138,11 +138,11 @@ def main(dir=os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')):
 	def root_exit() -> None: nonlocal file; save_file(file + '.json'); root.destroy(); sys.exit()  # bound to WM_DELETE_WINDOW, runs on window close, saves to file loaded and exits program
 
 	def open_url(link: str) -> None:
-		import webbrowser, pyperclip
+		import pyperclip
 		if os.name == 'posix':
 			pyperclip.copy(link)
 		else:
-			try: subprocess.run(f'"{settings["chrome_path"]}" --profile-directory="{settings["chrome_profile"]}" "{link}"')  # try to open link
+			try: subprocess.run(f'"{settings["webbrowser_executable"]}" {settings["webbrowser_arg"]} "{link}"')  # try to open link
 			except FileNotFoundError as e: print(e); print('Incorrect Chrome Path')  # if chrome is not found: print error
 	def add_work(format: str | Works, *args, **kwargs) -> Works:
 		'formats `format` argument and returns the created object'

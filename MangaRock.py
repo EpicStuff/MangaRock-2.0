@@ -49,8 +49,8 @@ class Works():  # works refer to all works of literature including books, anime,
 			8. -8 = whatever was extracted was not a number'''
 		import re, bs4
 		sites = {  # site:         find,   with,                       then find,       and get, split at, then get, render?; supported sites, might be outdated
-			'www.royalroad.com':  ('table', {'id':    'chapters'},           None, 'data-chapters', ' ',    0, False),
-			'asura.gg':           ('span',  {'class': 'epcur epcurlast'},    None,            None, ' ',    1, False),
+			'www.royalroad.com':  ('table', {'id':    'chapters'},           None, 'data-chapters', ' ',    0, False),  # based on absolute chapter count, not chapter name
+			'www.asurascans.com':           ('span',  {'class': 'epcur epcurlast'},    None,            None, ' ',    1, False),
 			'www.webtoons.com':   ('ul',    {'id': '_listUl'},               'li',            'id', '_',   -1, False),
 			'mangabuddy.com':     ('div',   {'class': 'latest-chapters'},     'a',          'href', '-',   -1, False),
 			'mangapuma.com':      ('div',   {'id': 'chapter-list-inner'},     'a',          'href', '-',   -1, False),
@@ -60,7 +60,7 @@ class Works():  # works refer to all works of literature including books, anime,
 			'bato.to':            ('item',  None,                           'title',          None, ' ',   -1, False),
 			'manganato.com':      ('ul',    {'class': 'row-content-chapter'}, 'a',          'href', '-',   -1, False),
 			'comickiba.com':      ('li',    {'class': 'wp-manga-chapter'},    'a',          'href', '-|/', -2,  True)}
-		sites['flamescans.org'] = sites['asura.gg']
+		sites['flamescans.org'] = sites['www.asurascans.com']
 		sites['zinmanga.com'] = sites['harimanga.com']
 		sites['www.mcreader.net'] = sites['www.manga-raw.club']
 		sites['chapmanganato.com'] = sites['readmanganato.com'] = sites['manganato.com']
@@ -75,11 +75,10 @@ class Works():  # works refer to all works of literature including books, anime,
 		except TypeError as e: print(e)  # then pass
 
 		for num, link in enumerate(self.links):  # for each link
-
-			if self.name == 'Project Cypher':
-				pass
-
 			site = link.split('/')[2]
+
+			# tmp solution
+			if site == 'bato.to': link = link.replace('title/', 'rss/series/') + '.xml'
 
 			if site in sites:  # if site is supported
 				try: link = await session.get(link)  # connecting to the site
@@ -145,13 +144,11 @@ def main(dir=os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')):
 		else:
 			try: subprocess.run(f'"{settings["chrome_path"]}" --profile-directory="{settings["chrome_profile"]}" "{link}"')  # try to open link
 			except FileNotFoundError as e: print(e); print('Incorrect Chrome Path')  # if chrome is not found: print error
-
 	def add_work(format: str | Works, *args, **kwargs) -> Works:
 		'formats `format` argument and returns the created object'
 		if type(format) is str: format = eval(format)  # if the format is a string, turn in into an object
 		if format in (Author, Series): return 'Not yet implemented'
 		return format(*args, **kwargs)  # return works object
-
 	def update_nodes(pipe_exit):
 		while pipe_exit.poll():
 			num, lChs = pipe_exit.recv(); work = Works.all[num]; work.lChs = lChs; del lChs
@@ -159,7 +156,6 @@ def main(dir=os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')):
 			except Exception as e: print('update_nodes() cannot focus:', e, work); continue
 			update_node(num, work)
 		root.after(100, update_nodes, pipe_exit)
-
 	def update_node(num: int, work: Works):
 		nonlocal settings
 		try:
@@ -177,7 +173,6 @@ def main(dir=os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')):
 				if link_pair[1] >= 0:  # if link is not error and has updated:
 					if 'nChs' in tree['columns']: tree.set(f'{num}.{link_pair[0]}', 'nChs', f'{link_pair[1] - work.chapter:g}')  # if tree has a new chapters column: set new chapters to the link's new chapters
 					if 'chapter' in tree['columns']: tree.set(f'{num}.{link_pair[0]}', 'chapter', f'{link_pair[1]:g}')  # if tree has a chapters column: set chapter to the link's latest chapter
-
 	def x(entry_input=None) -> None:  # called when button is press in reading mode
 		nonlocal root, stringVar, label, tree, entry, button, file, load_file, save_file, open_url, add_work, root_quit, tree_open, close_tree  # make gui elements and functions available to user
 		if entry_input is None: entry_input = stringVar.get()  # if function was not called by root_quit: get entry input
@@ -191,7 +186,6 @@ def main(dir=os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')):
 				try: print(exec(entry_input, globals(), locals()))  # try and print exec input
 				except Exception as e: print(e)  # if can't exec then print error
 		entry.delete(0, 'end')  # clear entry
-
 	def root_quit(e: tk.Event) -> None:  # called when <enter> or <Double-1>
 		nonlocal event, tree_input, entry_input, open_node
 		if e.widget.__class__ == ttk.Treeview:  # if its tree that called
@@ -204,7 +198,6 @@ def main(dir=os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')):
 			event = 'entry'; entry_input = stringVar.get(); entry.delete(0, 'end');  # set event to entry; set entry_input stringVar; clear entry
 			if len(entry_input) > 0 and entry_input[0] == '/': execute(entry_input.lstrip('/'))  # if entry_input is a command: execute() command
 		root.quit()  # resume code
-
 	def tree_open(e: tk.Event) -> None:  # runs when a tree node is opened
 		nonlocal open_node, open_children
 		node = tree.focus()  # set node to opened node
@@ -212,12 +205,10 @@ def main(dir=os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')):
 		else:
 			if open_node != '': tree.item(open_node, open=False)  # close previous open node
 			open_node = node  # record the new open node
-
 	def close_tree(to_close: list | tuple, to_open: str = None) -> None:
 		'closes all nodes provided with the option of leaving one open'
 		for node in to_close: tree.item(node, open=False)  # for all open nodes that need closing: close node
 		if to_open is not None: tree.item(to_open, open=True)  # of a node needs to be opened: open node
-
 	def execute(entry_input=None) -> None:
 		print('executing')
 		# nonlocal root, stringVar, label, tree, entry, button, file, load_file, save_file, open_url, add_work, root_quit, tree_open, close_tree  # make gui elements and functions available to user
@@ -251,7 +242,6 @@ def main(dir=os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')):
 		try: root.tk.eval(f'''package ifneeded tksvg 0.7 [list load [file join {dir + '/tksvg0.7'} tksvg07t.dll] tksvg]'''); root.tk.call('lappend', 'auto_path', dir + '/awthemes-10.3.0'); root.tk.call('package', 'require', theme); style.theme_use(theme)  # do style witchery to import tk theme, no idea what it actually does, found it somewhere online
 		except tk.TclError as e:
 			print('Could not load theme', e)  # if style loading fails, print error and continue
-			print('dir:', dir)
 			continue
 		break
 	style.configure('Treeview', rowheight=settings['font'][1] * 2, font=settings['font']); style.configure('Treeview.Item', indicatorsize=0, font=settings['font']); style.configure('Treeview.Heading', font=settings['font']); style.configure('TLabel', font=settings['font'])  # configure treeview and style fonts
@@ -336,18 +326,15 @@ def main(dir=os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')):
 			reading = tree_input; tree_input = tree_input.split('.')[0]; tree.selection_set(tree_input); label['text'] = f'Reading: {Works.all[int(tree_input)].name}'  # set reading to selected node; set tree_input to work even if link was selected; set tree.selection to tree_input; change label
 			tree.item(tree_input, open=True); open_node = tree_input  # open record work node
 
-	elif mode == 'Mode: Adding': print('Not Yet Implemented')
-	elif mode == 'Mode: Settings': print('Not Yet Implemented')
 
-
-def debug(link):
+def get_lchs(link: str) -> list:
 	from multiprocessing import Process, Pipe
 	pipe_exit, pipe_enter = Pipe(False)
-	a = Manga(name='debug', links=link)
+	tmp = Manga(name='debug', links=link)
 	# Process(target=update_all, args=(Works.all, pipe_enter)).start()
 	# print(pipe_exit.recv())
 	update_all(Works.all, pipe_enter)
-	print(a.lChs)
+	return tmp.lChs
 
 
 if __name__ == '__main__':

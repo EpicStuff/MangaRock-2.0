@@ -181,11 +181,7 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 			cols[-1]['resizable'] = False
 
 			gui.open_tabs[file] = load_file(file + '.json')
-			works = []
-			for work in gui.open_tabs[file]:
-				for link in work.links:
-					works.append({'name': work.name, 'link': link.link, 'chapter': work.chapter, 'tags': work.tags},)
-			gui.mode_reading(file, cols, works, lambda *args: print('selected events:', args))
+			gui.mode_reading(file, cols, generate_rowData(gui.open_tabs[file]), open_work)
 
 			# update_all(gui.open_tabs[file])
 	def update_all(works: list | tuple) -> None:
@@ -213,6 +209,13 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 		Process(target=asyncio.run, args=(async_main(pipe_enter), ), daemon=True).start()
 	def update_grid():
 		gui.grid
+	def generate_rowData(works, rows=[]):
+		for work in works:
+			for link in work.links:
+				rows.append({'name': work.name, 'link': link.link, 'chapter': work.chapter, 'tags': work.tags},)
+
+		return rows
+	def open_work(event): print('selected events:', event)
 
 	os.chdir(dir)  # change working directory to where file is located unless specified otherwise
 	settings = load_settings(settings_file, default_settings)  # load settings

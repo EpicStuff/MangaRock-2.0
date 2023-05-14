@@ -1,44 +1,28 @@
 from nicegui import ui
-import asyncio, random
+import asyncio
+from time import sleep
 
+async def tmp():
+	global x, l
+	x = x - 1
+	print('start:', x)
+	await asyncio.sleep(1)
+	print('done:', x)
+	l.set_text(str(x))
 
-c = False
+async def a_gen():
+	global x
+	for y in range(3):
+		await tmp(x)
+		yield
 
-async def tmp(event):
-	# grid.options['rowData'][0]['age'] = random.randint(0, 100)
-	# grid.call_api_method('refreshCells')
-	# grid.update()
-	# await ui.run_javascript('document.getElementById(6).class="test"', respond=False)
-	global c
+async def a_main(event):
+	global x, l
+	x = x + 3
+	await asyncio.gather(tmp(), tmp(), tmp())
 
-	a = [
-		{'name': 'Alice', 'age': 99},
-		{'name': 'Bob', 'age': 21},
-		{'name': 'Carol', 'age': 42},]
-	b = [
-		{'name': 'Alice', 'age': 1},
-		{'name': 'Carol', 'age': 99},]
-
-	c = not c
-	print(c)
-	if c: grid.call_api_method('setRowData', a)
-	else: grid.call_api_method('setRowData', b)
-
-grid = ui.aggrid({
-	'columnDefs': [
-		{'headerName': 'Name', 'field': 'name'},
-		{'headerName': 'Age', 'field': 'age'},
-	],
-	'rowData': [
-		{'name': 'Alice', 'age': 18},
-		{'name': 'Bob', 'age': 21},
-		{'name': 'Carol', 'age': 42},
-	],
-	'defaultColDef': {
-		'editable': True,
-            },
-}, theme='alpine-dark')
-
-ui.button('Test', on_click=tmp)
+x = 0
+l = ui.label('0')
+ui.button('Test', on_click=a_main)
 
 ui.run(dark=True)

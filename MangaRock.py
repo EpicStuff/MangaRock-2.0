@@ -53,21 +53,18 @@ class Link():
 		self.latest = ''
 	async def update(self, asession, renderers, sites: dict) -> int | Exception:
 		'Finds latest chapter from `self.link` then sets result or an error code to `self.latest`'
-		import re, bs4;
-
-		import time
-		time.sleep(3)
-
+		import re, bs4
+		# if site is supported
 		if self.site not in sites:
 			self.latest = Exception('site not supported')  # site not supported
 			return
-
+		# connecting to site
 		try:
 			link = await asession.get(link)  # connecting to the site
 		except Exception as e:  # connection error
 			self.chs = e
 			return
-
+		# render site if necessary
 		try:
 			if sites[self.site][6]:  # if needs to be rendered
 				if __debug__: print('rendering', self.link, '-', self.site)
@@ -157,7 +154,7 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 		except FileNotFoundError as e: print(e)  # except: print error
 		with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
 		format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
-	def enter_reading_mode_for_file(file: dict) -> None:
+	async def enter_reading_mode_for_file(file: dict) -> None:
 		def load_file(file: str) -> list:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			def add_work(format: str | Type, *args, **kwargs) -> Type:
@@ -172,43 +169,36 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 		file = file['args']['data']['name']
 		if file in gui.open_tabs:
 			gui.switch_tab({'args': file})
-		else:
-			cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
-			try:
-				for key, val in settings['to_display'][file].items():  # todo: maybe turn into list comprehension
-					cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': settings['default_column_width']})
-			except KeyError as e: print('Columns for', e, 'has not been specified in settings.yaml'); raise Exception  # todo: setup default columns instead of crash
-			cols[-1]['resizable'] = False
+			return
 
-			gui.open_tabs[file] = load_file(file + '.json')
-			gui.mode_reading(file, cols, generate_rowData(gui.open_tabs[file]), open_work)
+		cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
+		try:
+			for key, val in settings['to_display'][file].items():  # todo: maybe turn into list comprehension
+				cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': settings['default_column_width']})
+		except KeyError as e:
+			print('Columns for', e, 'has not been specified in settings.yaml'); raise Exception  # todo: setup default columns instead of crash
+		cols[-1]['resizable'] = False
 
-			# update_all(gui.open_tabs[file])
-	def update_all(works: list | tuple) -> None:
+		gui.open_tabs[file] = load_file(file + '.json')
+		gui.mode_reading(file, cols, generate_rowData(gui.open_tabs[file]), open_work)
+
+		await update_all(gui.open_tabs[file])
+	async def update_all(works: list | tuple) -> None:
 		'updates all works provided'
-		from requests_html import AsyncHTMLSession
-
-		async def update_each(work, session, pipe):
+		async def update_each(work: Type) -> None:
 			if 'links' in work.prop:
 				for link in work.links:
 					async with workers:
 						if __debug__: print('updating', link.link, '-', link.site)
-						await link.update(session, renderers, settings['sites'])
+						await link.update(asession, renderers, settings['sites'])
 						if __debug__: print('done updating', link.link, '-', link.site)
 					pass  # todo: update link in gui
-				pass  # todo: get latest chapter from gui
-				if settings['hide_unupdated_works']: pass  # todo: hide works with no updates in gui
-				pass  # todo: sort links and update gui
-			elif settings['hide_works_with_no_links']: pass  # todo: hide works with no links in gui
-		async def async_main(pipe):
-			session = AsyncHTMLSession()
-			await asyncio.gather(*[update_each(work, session, pipe) for work in works])
+			update_grid()
 
-		from multiprocessing import Process, Pipe
-		pipe_exit, pipe_enter = Pipe(False)
-		Process(target=asyncio.run, args=(async_main(pipe_enter), ), daemon=True).start()
-	def update_grid():
-		gui.grid
+		from requests_html import AsyncHTMLSession
+		asession = AsyncHTMLSession()
+		workers, renderers = asyncio.Semaphore(settings['workers']), asyncio.Semaphore(settings['renderers'])
+		await asyncio.gather(*[update_each(work) for work in works])
 	def generate_rowData(works, rows=[]):
 		for work in works:
 			for link in work.links:
@@ -218,9 +208,7 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 	def open_work(event): print('selected events:', event)
 
 	os.chdir(dir)  # change working directory to where file is located unless specified otherwise
-	settings = load_settings(settings_file, default_settings)  # load settings
-	workers, renderers = asyncio.Semaphore(settings['workers']), asyncio.Semaphore(settings['renderers'])
-	gui = GUI(settings)  # setup gui
+	gui = GUI(load_settings(settings_file, default_settings))  # load settings and setup gui
 	gui.mode_loading([{'name': file.split('.json')[0]} for file in os.listdir() if file[-5:] == '.json'], enter_reading_mode_for_file)
 	# enter_reading_mode_for_file gets called by gui.mode_loading when a file is selected
 	# update_all gets called by enter_reading_mode_for_file once it its done
@@ -229,15 +217,18 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 
 class GUI():
 	def __init__(self, settings: dict) -> None:
+		self.settings = settings
+		self.open_tabs = {'Main': {}}
 		ui.query('div').style('gap: 0')
 		with ui.tabs().props('dense') as self.tabs:
 			ui.tab('Main')
 		self.tab_panels = ui.tab_panels(self.tabs, value='Main')
-		self.open_tabs = {'Main': None}
-		self.settings = settings
 	def switch_tab(self, event: dict):
 		self.tabs.props(f'model-value={event["args"]}')
 		self.tab_panels.props(f'model-value={event["args"]}')
+	def update_grid(self, tab):
+		rows = generate_rowData(self.open_tabs[tab])
+		gui.
 	def mode_loading(self, files: list, func_select: Callable) -> None:
 		with self.tab_panels:
 			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):  # create main tab panel

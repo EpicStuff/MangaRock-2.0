@@ -1,8 +1,9 @@
 # Version: 3.3.1
 # okay, heres the plan, make links its own separate object and have the links update individualy. when the updates, it will then update its parent's display
-import os
+import os, asyncio
 from nicegui import ui
 from typing import Callable
+from functools import partial as wrap
 
 class Type():  # type represents the type of object things are, eg: authors, books, website, ...
 	''' Base Type class to be inherited by subclasses to give custom properties\n
@@ -60,9 +61,9 @@ class Link():
 			return
 		# connecting to site
 		try:
-			link = await asession.get(link)  # connecting to the site
+			link = await asession.get(self.link)  # connecting to the site
 		except Exception as e:  # connection error
-			self.chs = e
+			self.latest = e
 			return
 		# render site if necessary
 		try:
@@ -130,8 +131,8 @@ sites: #site,                 find,  with,                       then_find, and 
     flamescans.org:     *008
     www.mcreader.net:   *011
 '''
-def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml', *args):
-	import asyncio
+def main(name: str, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml', *args):
+	from requests_html import AsyncHTMLSession
 	def load_settings(settings_file: str, default_settings: str) -> dict:
 		def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 			with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
@@ -154,7 +155,7 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 		except FileNotFoundError as e: print(e)  # except: print error
 		with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
 		format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
-	async def enter_reading_mode_for_file(file: dict) -> None:
+	async def enter_reading_mode_for_file(gui: GUI, file: dict) -> None:
 		def load_file(file: str) -> list:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			def add_work(format: str | Type, *args, **kwargs) -> Type:
@@ -173,64 +174,81 @@ def main(name, dir=os.getcwd().replace('\\', '/'), settings_file='settings.yaml'
 
 		cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
 		try:
-			for key, val in settings['to_display'][file].items():  # todo: maybe turn into list comprehension
-				cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': settings['default_column_width']})
+			for key, val in gui.settings['to_display'][file].items():  # todo: maybe turn into list comprehension
+				cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': gui.settings['default_column_width']})
 		except KeyError as e:
 			print('Columns for', e, 'has not been specified in settings.yaml'); raise Exception  # todo: setup default columns instead of crash
 		cols[-1]['resizable'] = False
 
-		gui.open_tabs[file] = load_file(file + '.json')
-		gui.mode_reading(file, cols, generate_rowData(gui.open_tabs[file]), open_work)
+		gui.open_tabs[file] = {'works': load_file(file + '.json')}
+		gui.mode_reading(file, cols, generate_rowData(gui, gui.open_tabs[file]['works'], []), open_work)
 
-		await update_all(gui.open_tabs[file])
-	async def update_all(works: list | tuple) -> None:
+		await update_all(gui, gui.open_tabs[file]['works'], gui.open_tabs[file]['grid'])
+	async def update_all(gui: GUI, works: list | tuple, grid: ui.aggrid) -> None:
 		'updates all works provided'
-		async def update_each(work: Type) -> None:
+		async def update_each(gui: GUI, work: Type, grid: ui.aggrid) -> None:
 			if 'links' in work.prop:
 				for link in work.links:
-					async with workers:
+					async with gui.workers:
 						if __debug__: print('updating', link.link, '-', link.site)
-						await link.update(asession, renderers, settings['sites'])
+						await link.update(gui.asession, gui.renderers, gui.settings['sites'])
 						if __debug__: print('done updating', link.link, '-', link.site)
-					pass  # todo: update link in gui
-			update_grid()
+					gui.update_grid(grid, generate_rowData(gui, works, []))
 
-		from requests_html import AsyncHTMLSession
-		asession = AsyncHTMLSession()
-		workers, renderers = asyncio.Semaphore(settings['workers']), asyncio.Semaphore(settings['renderers'])
-		await asyncio.gather(*[update_each(work) for work in works])
-	def generate_rowData(works, rows=[]):
+		if __debug__ and input('update all? (y/n) ') == 'y':
+			await asyncio.gather(*[update_each(gui, work, grid) for work in works])
+	def generate_rowData(gui: GUI, works: list, rows=[]):
 		for work in works:
+			if 'links' not in work.prop:
+				rows.append(work.__dict__)
+			elif work.links == []:
+				if gui.settings['hide_works_with_no_links']:
+					continue
+				rows.append(work.__dict__)
+				continue
 			for link in work.links:
-				rows.append({'name': work.name, 'link': link.link, 'chapter': work.chapter, 'tags': work.tags},)
+				new_chapters = link.latest
+				if link.latest.__class__ is float:
+					new_chapters = link.latest - work.chapter
+					if new_chapters < 1 and gui.settings['hide_unupdated_works']:
+						continue
 
+				tmp = work.__dict__.copy()
+				del tmp['links']
+				rows.append({'link': link.link, 'nChs': new_chapters, **tmp})
 		return rows
-	def open_work(event): print('selected events:', event)
+	def open_work(gui: GUI, event: dict): print('selected events:', event)
 
-	os.chdir(dir)  # change working directory to where file is located unless specified otherwise
-	gui = GUI(load_settings(settings_file, default_settings))  # load settings and setup gui
+	os.chdir(dir)  # change working directory to where file is located unless specified otherwise, just in case
+	gui = GUI(load_settings(settings_file, default_settings))
+	gui.asession = AsyncHTMLSession()
+	gui.workers, gui.renderers = asyncio.Semaphore(gui.settings['workers']), asyncio.Semaphore(gui.settings['renderers'])
 	gui.mode_loading([{'name': file.split('.json')[0]} for file in os.listdir() if file[-5:] == '.json'], enter_reading_mode_for_file)
+	# load settings, setup gui, and enter loading mode
 	# enter_reading_mode_for_file gets called by gui.mode_loading when a file is selected
 	# update_all gets called by enter_reading_mode_for_file once it its done
 	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'))
 
+def tmp(*args):
+	print('refreshing')
+	ui.update()
 
 class GUI():
 	def __init__(self, settings: dict) -> None:
 		self.settings = settings
 		self.open_tabs = {'Main': {}}
 		ui.query('div').style('gap: 0')
-		with ui.tabs().props('dense') as self.tabs:
-			ui.tab('Main')
-		self.tab_panels = ui.tab_panels(self.tabs, value='Main')
-	def switch_tab(self, event: dict):
+		self.tabs = ui.tabs().props('dense').on('update:model-value', self.switch_tab)
+		self.panels = ui.tab_panels(self.tabs, value='Main')
+	def switch_tab(self, event: dict) -> None:
 		self.tabs.props(f'model-value={event["args"]}')
-		self.tab_panels.props(f'model-value={event["args"]}')
-	def update_grid(self, tab):
-		rows = generate_rowData(self.open_tabs[tab])
-		gui.
+		self.panels.props(f'model-value={event["args"]}')
+	def update_grid(self, grid: ui.aggrid, rows: list) -> None:
+		grid.call_api_method('setRowData', rows)
 	def mode_loading(self, files: list, func_select: Callable) -> None:
-		with self.tab_panels:
+		with self.tabs:
+			ui.tab('Main')
+		with self.panels:
 			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):  # create main tab panel
 				ui.label('Choose File: ')
 				gridOptions = {
@@ -245,20 +263,19 @@ class GUI():
 					'rowHeight': self.settings['row_height'],
 					# 'rowStyle': {'margin-top': '-4px'}  # not doing anything
 				}
-				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', func_select)
+				self.open_tabs['Main']['grid'] = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', wrap(func_select, self))
 				with ui.row().classes('w-full'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
-					ui.button().props('square').style('width: 40px; height: 40px;')
+					ui.button(on_click=tmp).props('square').style('width: 40px; height: 40px;')
 	def mode_reading(self, file: str, columnDefs: list, rowData: list, func_select: Callable) -> None:
-		self.tabs.on('update:model-value', self.switch_tab)
 		with self.tabs:
 			ui.tab(file)
 		# switch to (newly created) tab
 		self.switch_tab({'args': file})
 		# populate tab panel
-		with self.tab_panels:
+		with self.panels:
 			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
-				ui.label('Reading: ')
+				self.open_tabs[file]['label'] = ui.label('Reading: ')
 				gridOptions = {
 					'defaultColDef': {
 						'resizable': True,
@@ -275,15 +292,30 @@ class GUI():
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
 				}
-				self.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', lambda event: func_select(self, event))
+				self.open_tabs[file]['grid'] = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', wrap(func_select, self))
 				with ui.row().classes('w-full').style('gap: 0'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
-					ui.button().props('square').style('width: 40px; height: 40px;')
+					ui.button(on_click=tmp).props('square').style('width: 40px; height: 40px;')
+
+def test(link='https://chapmanganato.com/manga-mq990225'):
+	async def tmp1():
+		await asyncio.gather(tmp2())
+	async def tmp2():
+		await debug.update(asession, r, sites)
+	from requests_html import AsyncHTMLSession
+	asession = AsyncHTMLSession()
+	r = asyncio.Semaphore(1)
+	debug = Link(link)
+	sites = {'manganato.com': ['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], 'www.webtoons.com': ['ul', {'id': '_listUl'}, 'li', 'id', '_', -1, False], 'manhuascan.com': ['div', {'class': 'list-wrap'}, 'a', 'href', '-', -1, False], 'zahard.xyz': ['ul', {'class': 'chapters'}, 'a', 'href', '/', -1, False], 'www.royalroad.com': ['table', {'id': 'chapters'}, None, 'data-chapters', ' ', 0, False], '1stkissmanga.io': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, False], 'comickiba.com': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], 'asura.gg': ['span', {'class': 'epcur epcurlast'}, None, None, ' ', 1, False], 'mangapuma.com': ['div', {'id': 'chapter-list-inner'}, 'a', 'href', '-', -1, False], 'bato.to': ['item', None, 'title', None, ' ', -1, False], 'www.manga-raw.club': ['ul', {'class': 'chapter-list'}, 'a', 'href', '-|/', -4, False], None: [['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], ['ul', {'id': '_listUl'}, 'li', 'id', '_', -1, False], ['div', {'class': 'list-wrap'}, 'a', 'href', '-', -1, False], ['ul', {'class': 'chapters'}, 'a', 'href', '/', -1, False], ['table', {'id': 'chapters'}, None, 'data-chapters', ' ', 0, False], ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, False], ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], ['span', {'class': 'epcur epcurlast'}, None, None, ' ', 1, False], ['div', {'id': 'chapter-list-inner'}, 'a', 'href', '-', -1, False], ['item', None, 'title', None, ' ', -1, False], ['ul', {'class': 'chapter-list'}, 'a', 'href', '-|/', -4, False]], 'chapmanganato.com': ['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], 'readmanganato.com': ['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], 'nitroscans.com': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], 'anshscans.org': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], 'flamescans.org': ['span', {'class': 'epcur epcurlast'}, None, None, ' ', 1, False], 'www.mcreader.net': ['ul', {'class': 'chapter-list'}, 'a', 'href', '-|/', -4, False]}
+	asyncio.run(tmp1())
+	return debug.latest
 
 
 if __name__ in {"__main__", "__mp_main__"}:
-	import tracemalloc
-	tracemalloc.start()
+	# import tracemalloc
+	# tracemalloc.start()
 
-	import sys
-	main(*sys.argv)
+	# import sys
+	# main(*sys.argv)
+
+	print(test())

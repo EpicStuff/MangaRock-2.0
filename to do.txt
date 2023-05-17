@@ -4,4 +4,5 @@ make sure load settings doesn't just overwrite user settings with default settin
 add ability to change font
 make aggrid row properly shink (maybe by changing theme instead of adding rowHeight to gridOptions)
 fix column size/resizing
-add support of work skipping
+add support of work update skipping
+add auto grid column resizing (when browser window changes size)

@@ -8,7 +8,7 @@ to_display: # culumns to display for each Type, do not include name (it's requir
 workers: 3
 renderers: 1
 hide_unupdated_works: true # default: true
-hide_works_with_no_links: true # default: true
+hide_works_with_no_links: false # default: true
 sort_by: score # defulat: score
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score

@@ -1,28 +1,10 @@
-from nicegui import ui
-import asyncio
-from time import sleep
+from functools import partial as wrap
 
-async def tmp():
-	global x, l
-	x = x - 1
-	print('start:', x)
-	await asyncio.sleep(1)
-	print('done:', x)
-	l.set_text(str(x))
 
-async def a_gen():
-	global x
-	for y in range(3):
-		await tmp(x)
-		yield
+def t(a, b):
+    print(a, b)
 
-async def a_main(event):
-	global x, l
-	x = x + 3
-	await asyncio.gather(tmp(), tmp(), tmp())
 
-x = 0
-l = ui.label('0')
-ui.button('Test', on_click=a_main)
+x = wrap(t, 1)
 
-ui.run(dark=True)
+x(3)

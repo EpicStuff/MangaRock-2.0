@@ -137,6 +137,7 @@ sites: #site,                 find,  with,                       then_find, and 
 '''
 def main(name: str, dir=None, settings_file='settings.yaml', *args):
 	def jail_break(package='ag-grid-enterprise.min.js') -> None:
+		'upgrades aggrid to enterprise from community'
 		import nicegui, pathlib
 		assert nicegui.dependencies.js_dependencies[0].dependents == {'aggrid'}, 'Overwriting NiceGUI aggrid ran into a tiny problem'
 		nicegui.dependencies.js_dependencies[0].path = pathlib.Path('ag-grid-enterprise.min.js')
@@ -171,8 +172,8 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 				return format(*args, **kwargs)  # return works object
 
 			with open(file, 'r') as file:
-				import json
-				return json.load(file, object_hook=lambda kwargs: add_work(**kwargs))
+				from json5 import load
+				return load(file, object_hook=lambda kwargs: add_work(**kwargs))
 
 		file = file['args']['data']['name']
 		if file in gui.open_tabs:
@@ -187,8 +188,8 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 			print('Columns for', e, 'has not been specified in settings.yaml'); raise Exception  # todo: setup default columns instead of crash
 		cols[-1]['resizable'] = False
 
-		gui.open_tabs[file] = {'works': load_file(file + '.json')}
-		gui.mode_reading(file, cols, generate_rowData(gui, gui.open_tabs[file]['works'], []), open_work)
+		gui.open_tabs[file] = {'works': load_file(file + '.json5')}
+		gui.mode_reading(file, cols, generate_rowData(gui, gui.open_tabs[file]['works'], []), work_selected)
 
 		await update_all(gui, gui.open_tabs[file]['works'], gui.open_tabs[file]['grid'])
 	async def update_all(gui: GUI, works: list | tuple, grid: ui.aggrid) -> None:
@@ -224,7 +225,8 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 				del tmp['links']
 				rows.append({'link': link.link, 'nChs': new_chapters, **tmp})
 		return rows
-	def open_work(gui: GUI, event: dict): print('selected events:', event)
+	def work_selected(gui: GUI, event: dict):
+		print('selected events:', event)
 	import os
 	# change working directory to where file is located unless specified otherwise, just in case
 	if not dir:
@@ -236,7 +238,7 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 	gui = GUI(settings)
 	gui.workers = asyncio.Semaphore(gui.settings['workers']); gui.renderers = asyncio.Semaphore(gui.settings['renderers'])
 	# setup loading mode
-	files = [{'name': file.split('.json')[0]} for file in os.listdir() if file[-5:] == '.json']
+	files = [{'name': file.split('.json5')[0]} for file in os.listdir() if file[-5:] == '.json5']
 	gui.mode_loading(files, enter_reading_mode_for_file)
 	# enter_reading_mode_for_file gets called by gui.mode_loading when a file is selected
 	# update_all gets called by enter_reading_mode_for_file once it its done

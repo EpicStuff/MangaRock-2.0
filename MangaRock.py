@@ -136,6 +136,10 @@ sites: #site,                 find,  with,                       then_find, and 
     www.mcreader.net:   *011
 '''
 def main(name: str, dir=None, settings_file='settings.yaml', *args):
+	def jail_break(package='ag-grid-enterprise.min.js') -> None:
+		import nicegui, pathlib
+		assert nicegui.dependencies.js_dependencies[0].dependents == {'aggrid'}, 'Overwriting NiceGUI aggrid ran into a tiny problem'
+		nicegui.dependencies.js_dependencies[0].path = pathlib.Path('ag-grid-enterprise.min.js')
 	def load_settings(settings_file: str, default_settings: str) -> dict:
 		def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 			with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
@@ -228,6 +232,7 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 	os.chdir(dir)
 	# setup gui and semaphores for get latest chapters
 	settings = load_settings(settings_file, default_settings)
+	jail_break()
 	gui = GUI(settings)
 	gui.workers = asyncio.Semaphore(gui.settings['workers']); gui.renderers = asyncio.Semaphore(gui.settings['renderers'])
 	# setup loading mode

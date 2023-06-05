@@ -1,10 +1,10 @@
-from functools import partial as wrap
+from nicegui import ui
+import asyncio
+
+ui.label('Hello World')
+
+async def test():
+    ui.run()
 
 
-def t(a, b):
-    print(a, b)
-
-
-x = wrap(t, 1)
-
-x(3)
+asyncio.run(test())

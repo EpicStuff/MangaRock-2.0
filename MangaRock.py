@@ -55,6 +55,10 @@ class Link():
 	async def update(self, asession, renderers, sites: dict) -> int | Exception:
 		'Finds latest chapter from `self.link` then sets result or an error code to `self.latest`'
 		import re, bs4
+
+		from requests_html import AsyncHTMLSession
+		asession = AsyncHTMLSession()
+
 		# if site is supported
 		if self.site not in sites:
 			self.latest = Exception('site not supported')  # site not supported
@@ -93,6 +97,8 @@ class Link():
 			self.latest = float(re.split(sites[self.site][4], link)[sites[self.site][5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 		except Exception as e:
 			self.latest = e  # whatever was extracted was not a number
+
+		return self.latest
 
 
 default_settings = '''
@@ -229,10 +235,6 @@ def main(name: str, dir=os.getcwd().replace('\\', '/'), settings_file='settings.
 	# update_all gets called by enter_reading_mode_for_file once it its done
 	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'))
 
-def tmp(*args):
-	print('refreshing')
-	ui.update()
-
 class GUI():
 	def __init__(self, settings: dict) -> None:
 		self.settings = settings
@@ -298,22 +300,32 @@ class GUI():
 					ui.button(on_click=tmp).props('square').style('width: 40px; height: 40px;')
 
 def test(link='https://chapmanganato.com/manga-mq990225'):
-	async def tmp1():
-		await asyncio.gather(tmp2())
+	# async def tmp1():
+	# 	await asyncio.gather(tmp2())
 	async def tmp2():
-		await debug.update(asession, r, sites)
+		await debug.update(asession, asyncio.Semaphore(1), sites)
 	from requests_html import AsyncHTMLSession
 	asession = AsyncHTMLSession()
-	r = asyncio.Semaphore(1)
 	debug = Link(link)
 	sites = {'manganato.com': ['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], 'www.webtoons.com': ['ul', {'id': '_listUl'}, 'li', 'id', '_', -1, False], 'manhuascan.com': ['div', {'class': 'list-wrap'}, 'a', 'href', '-', -1, False], 'zahard.xyz': ['ul', {'class': 'chapters'}, 'a', 'href', '/', -1, False], 'www.royalroad.com': ['table', {'id': 'chapters'}, None, 'data-chapters', ' ', 0, False], '1stkissmanga.io': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, False], 'comickiba.com': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], 'asura.gg': ['span', {'class': 'epcur epcurlast'}, None, None, ' ', 1, False], 'mangapuma.com': ['div', {'id': 'chapter-list-inner'}, 'a', 'href', '-', -1, False], 'bato.to': ['item', None, 'title', None, ' ', -1, False], 'www.manga-raw.club': ['ul', {'class': 'chapter-list'}, 'a', 'href', '-|/', -4, False], None: [['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], ['ul', {'id': '_listUl'}, 'li', 'id', '_', -1, False], ['div', {'class': 'list-wrap'}, 'a', 'href', '-', -1, False], ['ul', {'class': 'chapters'}, 'a', 'href', '/', -1, False], ['table', {'id': 'chapters'}, None, 'data-chapters', ' ', 0, False], ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, False], ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], ['span', {'class': 'epcur epcurlast'}, None, None, ' ', 1, False], ['div', {'id': 'chapter-list-inner'}, 'a', 'href', '-', -1, False], ['item', None, 'title', None, ' ', -1, False], ['ul', {'class': 'chapter-list'}, 'a', 'href', '-|/', -4, False]], 'chapmanganato.com': ['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], 'readmanganato.com': ['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], 'nitroscans.com': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], 'anshscans.org': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], 'flamescans.org': ['span', {'class': 'epcur epcurlast'}, None, None, ' ', 1, False], 'www.mcreader.net': ['ul', {'class': 'chapter-list'}, 'a', 'href', '-|/', -4, False]}
-	asyncio.run(tmp1())
+	asyncio.run(tmp2())
 	return debug.latest
 
 
+def test2():
+	async def t():
+		return await debug.update(asession, asyncio.Semaphore(1), sites)
+	from requests_html import AsyncHTMLSession
+	asession = AsyncHTMLSession()
+	link = 'https://manhuagold.com/manga/-/37'
+	debug = Link(link)
+	sites = {'manganato.com': ['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], 'www.webtoons.com': ['ul', {'id': '_listUl'}, 'li', 'id', '_', -1, False], 'manhuascan.com': ['div', {'class': 'list-wrap'}, 'a', 'href', '-', -1, False], 'zahard.xyz': ['ul', {'class': 'chapters'}, 'a', 'href', '/', -1, False], 'www.royalroad.com': ['table', {'id': 'chapters'}, None, 'data-chapters', ' ', 0, False], '1stkissmanga.io': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, False], 'comickiba.com': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], 'asura.gg': ['span', {'class': 'epcur epcurlast'}, None, None, ' ', 1, False], 'mangapuma.com': ['div', {'id': 'chapter-list-inner'}, 'a', 'href', '-', -1, False], 'bato.to': ['item', None, 'title', None, ' ', -1, False], 'www.manga-raw.club': ['ul', {'class': 'chapter-list'}, 'a', 'href', '-|/', -4, False], None: [['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], ['ul', {'id': '_listUl'}, 'li', 'id', '_', -1, False], ['div', {'class': 'list-wrap'}, 'a', 'href', '-', -1, False], ['ul', {'class': 'chapters'}, 'a', 'href', '/', -1, False], ['table', {'id': 'chapters'}, None, 'data-chapters', ' ', 0, False], ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, False], ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], ['span', {'class': 'epcur epcurlast'}, None, None, ' ', 1, False], ['div', {'id': 'chapter-list-inner'}, 'a', 'href', '-', -1, False], ['item', None, 'title', None, ' ', -1, False], ['ul', {'class': 'chapter-list'}, 'a', 'href', '-|/', -4, False]], 'chapmanganato.com': ['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], 'readmanganato.com': ['ul', {'class': 'row-content-chapter'}, 'a', 'href', '-', -1, False], 'nitroscans.com': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], 'anshscans.org': ['li', {'class': 'wp-manga-chapter'}, 'a', 'href', '-|/', -2, True], 'flamescans.org': ['span', {'class': 'epcur epcurlast'}, None, None, ' ', 1, False], 'www.mcreader.net': ['ul', {'class': 'chapter-list'}, 'a', 'href', '-|/', -4, False]}
+	print(asession.run(t))
+
+
 if __name__ in {"__main__", "__mp_main__"}:
-	# import tracemalloc
-	# tracemalloc.start()
+	import tracemalloc
+	tracemalloc.start()
 
 	# import sys
 	# main(*sys.argv)

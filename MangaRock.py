@@ -137,7 +137,7 @@ sites: #site,                 find,  with,                       then_find, and 
 '''
 def main(name: str, dir=None, settings_file='settings.yaml', *args):
 	def jail_break(package='ag-grid-enterprise.min.js') -> None:
-		'upgrades aggrid to enterprise from community'
+		'upgrade aggrid from community to enterprise'
 		import nicegui, pathlib
 		assert nicegui.dependencies.js_dependencies[0].dependents == {'aggrid'}, 'Overwriting NiceGUI aggrid ran into a tiny problem'
 		nicegui.dependencies.js_dependencies[0].path = pathlib.Path('ag-grid-enterprise.min.js')
@@ -226,7 +226,9 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 				rows.append({'link': link.link, 'nChs': new_chapters, **tmp})
 		return rows
 	def work_selected(gui: GUI, event: dict):
-		print('selected events:', event)
+		print('\n', event['args'])
+
+		if gui.reading: pass
 	import os
 	# change working directory to where file is located unless specified otherwise, just in case
 	if not dir:
@@ -238,10 +240,14 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 	gui = GUI(settings)
 	gui.workers = asyncio.Semaphore(gui.settings['workers']); gui.renderers = asyncio.Semaphore(gui.settings['renderers'])
 	# setup loading mode
-	files = [{'name': file.split('.json5')[0]} for file in os.listdir() if file[-5:] == '.json5']
+	files = [{'name': file.split('.json5')[0]} for file in os.listdir() if file.split('.')[-1] == 'json5']
 	gui.mode_loading(files, enter_reading_mode_for_file)
 	# enter_reading_mode_for_file gets called by gui.mode_loading when a file is selected
 	# update_all gets called by enter_reading_mode_for_file once it its done
+
+	# ill move this somewhere else later
+	gui.reading = None
+
 	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
 
 class GUI():

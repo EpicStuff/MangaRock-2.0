@@ -175,6 +175,8 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 				from json5 import load
 				return load(file, object_hook=lambda kwargs: add_work(**kwargs))
 
+		print('testing')
+
 		file = file['args']['data']['name']
 		if file in gui.open_tabs:
 			gui.switch_tab({'args': file})
@@ -191,7 +193,7 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 		gui.open_tabs[file] = {'works': load_file(file + '.json5')}
 		gui.mode_reading(file, cols, generate_rowData(gui, gui.open_tabs[file]['works'], []), work_selected)
 
-		await update_all(gui, gui.open_tabs[file]['works'], gui.open_tabs[file]['grid'])
+		# await update_all(gui, gui.open_tabs[file]['works'], gui.open_tabs[file]['grid'])
 	async def update_all(gui: GUI, works: list | tuple, grid: ui.aggrid) -> None:
 		'updates all works provided'
 		async def update_each(gui: GUI, work: Type, grid: ui.aggrid) -> None:
@@ -225,10 +227,31 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 				del tmp['links']
 				rows.append({'link': link.link, 'nChs': new_chapters, **tmp})
 		return rows
-	def work_selected(gui: GUI, event: dict):
-		print('\n', event['args'])
+	async def work_selected(gui: GUI, event: dict):
+		def close_all_other():
+			pass
+		print('\n', event)
+
+		for tab, val in gui.open_tabs.items():
+			if val['grid'].id == event['id']:
+				break
 
 		if gui.reading: pass
+		else:
+			if event['args']['colId'] == 'ag-Grid-AutoColumn':
+				result = await ui.run_javascript(
+					# f"getElement({event['id']}).gridOptions.api.getRowNode({event['args']['rowId']})",
+					# f"getElement({event['id']}).gridOptions.api.setRowNodeExpanded(getElement({event['id']}).gridOptions.api.getRowNode({event['args']['rowId']}), false)",
+					f'''
+						grid = getElement({event['id']});
+						alert("test");
+					''',
+					respond=False
+				)
+				# print(result)
+				# gui.open_tabs[tab]['grid'].call_api_method('setRowNodeExpanded', gui.open)
+				# gui.open_tabs[tab]['grid'].call_api_method('collapseAll')
+				gui.open = event['args']['rowId']
 	import os
 	# change working directory to where file is located unless specified otherwise, just in case
 	if not dir:
@@ -247,6 +270,7 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 
 	# ill move this somewhere else later
 	gui.reading = None
+	gui.open = ''
 
 	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
 

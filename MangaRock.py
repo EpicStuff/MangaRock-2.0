@@ -27,6 +27,8 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 		if 'links' in self.prop:
 			for num, link in enumerate(self.links):
 				self.links[num] = Link(link)
+	def update(self, what='chapter', source='links'):
+		self.__dict__[what] = max([link.latest for link in self.__dict__[source]])
 	@classmethod
 	def sort(cls, sort_by: str = 'name', look_up_table: dict = None, reverse: bool = True) -> None:
 		'''sort `cls.all` by given dict, defaults to name'''
@@ -191,9 +193,9 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 		cols[-1]['resizable'] = False
 
 		gui.open_tabs[file] = {'works': load_file(file + '.json5')}
-		gui.mode_reading(file, cols, generate_rowData(gui, gui.open_tabs[file]['works'], []), work_selected)
+		gui.mode_reading(file, cols, generate_rowData(gui, gui.open_tabs[file]['works'], []), work_selected, close_all_other)
 
-		# await update_all(gui, gui.open_tabs[file]['works'], gui.open_tabs[file]['grid'])
+		await update_all(gui, gui.open_tabs[file]['works'], gui.open_tabs[file]['grid'])
 	async def update_all(gui: GUI, works: list | tuple, grid: ui.aggrid) -> None:
 		'updates all works provided'
 		async def update_each(gui: GUI, work: Type, grid: ui.aggrid) -> None:
@@ -205,7 +207,8 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 						if __debug__: print('done updating', link.link, '-', link.site)
 					gui.update_grid(grid, generate_rowData(gui, works, []))
 
-		if __debug__ and input('update all? (y/n) ') == 'y':
+		# if __debug__ and input('update all? (y/n) ') == 'y':
+		if True:
 			await asyncio.gather(*[update_each(gui, work, grid) for work in works])
 	def generate_rowData(gui: GUI, works: list, rows=[]):
 		for work in works:
@@ -227,31 +230,49 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 				del tmp['links']
 				rows.append({'link': link.link, 'nChs': new_chapters, **tmp})
 		return rows
+	async def close_all_other(gui: GUI, event: dict):
+		if gui.open == event['args']['rowId']:
+			gui.open = None
+			return
+		# if this event was called by a row being closed, do nothing
+		if not await ui.run_javascript(f"getElement({event['id']}).gridOptions.api.getRowNode('{event['args']['rowId']}').expanded"):
+			return
+		# if something is previously open
+		if gui.open is not None:
+			# close previous open row
+			await ui.run_javascript(f'''
+				var grid = getElement({event['id']}).gridOptions.api;
+				var node = grid.getRowNode("{gui.open}");
+				grid.setRowNodeExpanded(node, false);
+			''', respond=False)
+		gui.open = event['args']['rowId']
 	async def work_selected(gui: GUI, event: dict):
-		def close_all_other():
-			pass
 		print('\n', event)
 
 		for tab, val in gui.open_tabs.items():
 			if val['grid'].id == event['id']:
 				break
 
-		if gui.reading: pass
-		else:
-			if event['args']['colId'] == 'ag-Grid-AutoColumn':
-				result = await ui.run_javascript(
-					# f"getElement({event['id']}).gridOptions.api.getRowNode({event['args']['rowId']})",
-					# f"getElement({event['id']}).gridOptions.api.setRowNodeExpanded(getElement({event['id']}).gridOptions.api.getRowNode({event['args']['rowId']}), false)",
-					f'''
-						grid = getElement({event['id']});
-						alert("test");
-					''',
-					respond=False
-				)
-				# print(result)
-				# gui.open_tabs[tab]['grid'].call_api_method('setRowNodeExpanded', gui.open)
-				# gui.open_tabs[tab]['grid'].call_api_method('collapseAll')
-				gui.open = event['args']['rowId']
+		event = event['args']
+		if gui.reading:
+			if event['colId'] == 'ag-Grid-AutoColumn':
+				work = gui.open_tabs[tab]['works'][event['rowIndex']]
+				if work == gui.reading:
+					work.update()
+					gui.open_tabs[tab]['label'].set_text('Reading:')
+					gui.reading = None
+					gui.update_grid(gui.open_tabs[tab]['grid'], generate_rowData(gui, gui.open_tabs[tab]['works'], []))
+					return
+			else:
+				return
+
+		if event['colId'] == 'ag-Grid-AutoColumn':
+			work = gui.open_tabs[tab]['works'][event['rowIndex']]
+			await open_link(work.links[0].link)
+			gui.open_tabs[tab]['label'].set_text('Reading: ' + work.name)
+			gui.reading = work
+	async def open_link(link: str) -> None:
+		await ui.run_javascript(f"window.open('{link}')", respond=False)
 	import os
 	# change working directory to where file is located unless specified otherwise, just in case
 	if not dir:
@@ -272,7 +293,7 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 	gui.reading = None
 	gui.open = ''
 
-	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
+	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=1)
 
 class GUI():
 	def __init__(self, settings: dict) -> None:
@@ -308,7 +329,7 @@ class GUI():
 				with ui.row().classes('w-full'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
-	def mode_reading(self, file: str, columnDefs: list, rowData: list, func_select: Callable) -> None:
+	def mode_reading(self, file: str, columnDefs: list, rowData: list, func_select: Callable, func_tmp: Callable) -> None:
 		with self.tabs:
 			ui.tab(file)
 		# switch to (newly created) tab
@@ -333,7 +354,9 @@ class GUI():
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
 				}
-				self.open_tabs[file]['grid'] = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', wrap(func_select, self))
+				self.open_tabs[file]['grid'] = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)')
+				self.open_tabs[file]['grid'].on('rowGroupOpened', wrap(func_tmp, self))
+				self.open_tabs[file]['grid'].on('cellDoubleClicked', wrap(func_select, self))
 				with ui.row().classes('w-full').style('gap: 0'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')

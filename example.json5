@@ -6,5 +6,11 @@
 		"chapter": 10,
 		"score": "Great",
 		"tags": ["strong lead"]
+	},
+	{
+		"format": "Manga",
+		"name": "Test",
+		"links": ["https://example.com"],
+		"chapter": 1,
 	}
 ]

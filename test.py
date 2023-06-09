@@ -6,7 +6,11 @@ assert nicegui.dependencies.js_dependencies[0].dependents == {'aggrid'}, 'Overwr
 nicegui.dependencies.js_dependencies[0].path = pathlib.Path('ag-grid-enterprise.min.js')
 
 
-rowData = [{'name': 'test', 'link': 'abc'}]
+rowData = [
+	{'name': 'test1', 'link': 'abc'},
+	{'name': 'test2', 'link': 'def'},
+	{'name': 'test3', 'link': 'ghi'},
+]
 columnDefs = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
 
 gridOptions = {
@@ -28,39 +32,47 @@ gridOptions = {
 
 table = ui.aggrid(gridOptions)
 
-# async def count():
-# 	rows = await ui.run_javascript(f'getElement({table.id}).gridOptions.api.getSelectedRows()')
-# 	print(rows)
-# 	ui.notify(f'{len(rows)} selected')
+open = None
 
+async def tmp(arg):
+	global open
+	print(arg)
 
-# async def test(arg):
-# 	print(arg)
-# 	test = await ui.run_javascript(f'getElement({table.id}).gridOptions.api.getRowNode("1")', respond=False)
-# 	# print(test)
+	node_clicked = arg['args']['rowId']
 
+	tmp = await ui.run_javascript(f'getElement({table.id}).gridOptions.api.getRowNode("{node_clicked}").expanded;')
+	if not tmp:
+		return
 
-ui.button('Select', on_click=lambda: table.call_api_method('selectAll'))
-# ui.button('Deselect', on_click=lambda: table.call_api_method('deselectAll'))
+	if open is None:
+		open = node_clicked
+		return
 
-# table.on('cellDoubleClicked', test)
-
-# ui.run()
-async def test():
-	r = await ui.run_javascript(
+	print('closing:', open)
+	await ui.run_javascript(
 		f'''
 			var x = getElement({table.id}).gridOptions.api;
-			var y = x.getRowNode(1);
-			return x;
+			var y = x.getRowNode("{open}");
+			x.setRowNodeExpanded(y, false);
 		''',
-		# respond=False
+		# '''
+		# 	var x = getElement(4);
+		# 	x.gridOptions.api.forEachNode(function(node) {
+		# 		if(node.expanded && node.group && node.id !== ''' + arg['args']['rowId'] + ''') {
+		# 				node.setExpanded(false);
+		# 		}
+		# 	});
+		# ''',
+		respond=False
 	)
-	# r = await ui.run_javascript(
-	# 	f'''
-	# 		return "Test";
-	# 	''',
-	# )
-	print(r)
+	open = node_clicked
+	print('now open:', open)
 
-ui.button('test', on_click=test)
+def tmp2(arg):
+	print(arg)
+
+
+table.on('onRowDoubleClicked', tmp2)
+# table.on('rowGroupOpened', tmp)
+
 ui.run()

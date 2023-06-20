@@ -1,10 +1,10 @@
 dark_mode: true # default: true
-font: [OCR A Extended, 8] # [font name, font size]
+font: [OCR A Extended, 8] # [font name, font size], not yet implemented
 default_column_width: 16
 row_height: 32
 to_display: # culumns to display for each Type, do not include name (it's required and auto included)
-    Manga: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
     example: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+    example: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
 workers: 3
 renderers: 1
 hide_unupdated_works: true # default: true

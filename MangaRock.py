@@ -5,7 +5,7 @@ from nicegui import ui
 from typing import Callable
 from functools import partial as wrap
 
-class Type():  # type represents the type of object things are, eg: authors, books, website, ...
+class Work():
 	''' Base Type class to be inherited by subclasses to give custom properties\n
 	Custom Book class Example: `class Book(Type): all = {}; prop = {'name': None, 'author': None, 'score': None, 'tags': []}`'''
 	prop = {'name': None}; all = []  # prop is short for properties, dict provided by sub object; all = list of all loaded obj/works of this class, eg = incase user wishes to iterate through all books
@@ -46,9 +46,6 @@ class Type():  # type represents the type of object things are, eg: authors, boo
 	def __iter__(self) -> object: return self  # required for to iter over
 	def __str__(self) -> str: return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'  # returns self in str format
 	def __repr__(self) -> str: return f'<{self.name}>'  # represent self as self.name between <>
-class Manga(Type):  all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
-class Anime(Type):  all = {}; prop = {'name': None, 'links': [], 'episode': 0, 'series': None, 'score': None, 'tags': []}
-class Text(Type):   all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'fandom': None, 'author': None, 'series': None, 'score': None, 'tags': []}
 class Link():
 	def __init__(self, link: str) -> None:
 		self.site = link.split('/')[2]

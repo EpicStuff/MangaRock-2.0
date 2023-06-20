@@ -9,8 +9,18 @@
 	},
 	{
 		"format": "Manga",
-		"name": "Test",
+		"name": "Test 1",
+		"series": "testing",
+		"author": "tester",
 		"links": ["https://example.com"],
 		"chapter": 1,
+	},
+	{
+		"format": "Manga",
+		"name": "Test 2",
+		"series": "testing",
+		"author": "tester",
+		"links": ["https://example.com"],
+		"chapter": 2,
 	}
 ]

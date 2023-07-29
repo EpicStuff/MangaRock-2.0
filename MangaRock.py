@@ -96,20 +96,96 @@ class Link():
 			self.latest = e  # whatever was extracted was not a number
 
 		return self.latest
+class GUI():
+	def __init__(self, settings: dict) -> None:
+		self.jailbreak()
+		self.settings = settings
+		self.tabs = ui.tabs().props('dense').on('update:model-value', self.switch_tab)
+		self.panels = ui.tab_panels(self.tabs)
+		self.open_tabs = {'Main': {}}
+		# setup semaphores for get latest chapters
+		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
+		ui.query('div').style('gap: 0')
+	def jailbreak(self, package: str = 'ag-grid-enterprise.min.js') -> None:
+		'upgrade aggrid from community to enterprise'
+		import pathlib
+		from nicegui.dependencies import js_dependencies
+		assert js_dependencies[0].dependents == {'aggrid'}, 'Overwriting NiceGUI aggrid ran into a tiny problem'
+		js_dependencies[0].path = pathlib.Path(package)
+	def switch_tab(self, event: dict) -> None:
+		self.tabs.props(f'model-value={event["args"]}')
+		self.panels.props(f'model-value={event["args"]}')
+	def mode_loading(self, files: list) -> None:
+		# create main tab
+		with self.tabs:
+			ui.tab('Main')
+		# switch to main tab
+		self.tabs.set_value('Main')
+		# create main panel
+		with self.panels:
+			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+				ui.label('Choose File: ')
+				gridOptions = {
+					'defaultColDef': {
+						'resizable': True,
+						'suppressMenu': True,
+					},
+					'columnDefs': [
+						{'headerName': 'Name', 'field': 'name', 'resizable': False},
+					],
+					'rowData': files,
+					'rowHeight': self.settings['row_height'],
+				}
+				self.open_tabs['Main']['grid'] = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', wrap(func_select, self))
+				with ui.row().classes('w-full'):
+					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
+					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
+	def update_grid(self, grid: ui.aggrid, rows: list) -> None:
+		grid.call_api_method('setRowData', rows)
+	def mode_reading(self, file: str, columnDefs: list, rowData: list, func_select: Callable, func_tmp: Callable) -> None:
+		with self.tabs:
+			ui.tab(file)
+		# switch to (newly created) tab
+		self.switch_tab({'args': file})
+		# populate tab panel
+		with self.panels:
+			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+				self.open_tabs[file]['label'] = ui.label('Reading: ')
+				gridOptions = {
+					'defaultColDef': {
+						'resizable': True,
+						'suppressMenu': True,
+						'cellRendererParams': {'suppressCount': True, },
+					},
+					'autoGroupColumnDef': {
+						'headerName': 'Name',
+						'field': 'link',
+					},
+					'columnDefs': columnDefs,
+					'rowData': rowData,
+					'rowHeight': self.settings['row_height'],
+					'animateRows': True,
+					'suppressAggFuncInHeader': True,
+				}
+				self.open_tabs[file]['grid'] = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)')
+				self.open_tabs[file]['grid'].on('rowGroupOpened', wrap(func_tmp, self))
+				self.open_tabs[file]['grid'].on('cellDoubleClicked', wrap(func_select, self))
+				with ui.row().classes('w-full').style('gap: 0'):
+					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
+					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
 
 
 default_settings = '''
 dark_mode: true # default: true
-font: [OCR A Extended, 8] # [font name, font size]
-default_column_width: 32
+font: [OCR A Extended, 8] # [font name, font size], not yet implemented
+default_column_width: 16
 row_height: 32
 to_display: # culumns to display for each Type, do not include name (it's required and auto included)
-    Manga: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
-    example: {nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+    example: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
 workers: 3
 renderers: 1
 hide_unupdated_works: true # default: true
-hide_works_with_no_links: true # default: true
+hide_works_with_no_links: false # default: true
 sort_by: score # defulat: score
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
@@ -127,15 +203,15 @@ sites: #site,                 find,  with,                       then_find, and 
     bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
     www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
     null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011] # for formatting reasons
-    chapmanganato.com:  *001
-    readmanganato.com:  *001
-    nitroscans.com:     *007
-    anshscans.org:      *007
-    flamescans.org:     *008
-    www.mcreader.net:   *011
+    chapmanganato.com: *001
+    readmanganato.com: *001
+    nitroscans.com:    *007
+    anshscans.org:     *007
+    flamescans.org:    *008
+    www.mcreader.net:  *011
 '''
-def main(name: str, dir=None, settings_file='settings.yaml', *args):
-	def jail_break(package='ag-grid-enterprise.min.js') -> None:
+def main_old(name: str, dir=None, settings_file='settings.yaml', *args):
+	def jailbreak(package='ag-grid-enterprise.min.js') -> None:
 		'upgrade aggrid from community to enterprise'
 		import nicegui, pathlib
 		assert nicegui.dependencies.js_dependencies[0].dependents == {'aggrid'}, 'Overwriting NiceGUI aggrid ran into a tiny problem'
@@ -292,71 +368,42 @@ def main(name: str, dir=None, settings_file='settings.yaml', *args):
 
 	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=1)
 
-class GUI():
-	def __init__(self, settings: dict) -> None:
-		self.settings = settings
-		self.open_tabs = {'Main': {}}
-		ui.query('div').style('gap: 0')
-		self.tabs = ui.tabs().props('dense').on('update:model-value', self.switch_tab)
-		self.panels = ui.tab_panels(self.tabs, value='Main')
-	def switch_tab(self, event: dict) -> None:
-		self.tabs.props(f'model-value={event["args"]}')
-		self.panels.props(f'model-value={event["args"]}')
-	def update_grid(self, grid: ui.aggrid, rows: list) -> None:
-		grid.call_api_method('setRowData', rows)
-	def mode_loading(self, files: list, func_select: Callable) -> None:
-		with self.tabs:
-			ui.tab('Main')
-		with self.panels:
-			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):  # create main tab panel
-				ui.label('Choose File: ')
-				gridOptions = {
-					'defaultColDef': {
-						'resizable': True,
-						'suppressMenu': True,
-					},
-					'columnDefs': [
-						{'headerName': 'Name', 'field': 'name', 'resizable': False},
-					],
-					'rowData': files,
-					'rowHeight': self.settings['row_height'],
-					# 'rowStyle': {'margin-top': '-4px'}  # not doing anything
-				}
-				self.open_tabs['Main']['grid'] = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', wrap(func_select, self))
-				with ui.row().classes('w-full'):
-					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
-					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
-	def mode_reading(self, file: str, columnDefs: list, rowData: list, func_select: Callable, func_tmp: Callable) -> None:
-		with self.tabs:
-			ui.tab(file)
-		# switch to (newly created) tab
-		self.switch_tab({'args': file})
-		# populate tab panel
-		with self.panels:
-			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
-				self.open_tabs[file]['label'] = ui.label('Reading: ')
-				gridOptions = {
-					'defaultColDef': {
-						'resizable': True,
-						'suppressMenu': True,
-						'cellRendererParams': {'suppressCount': True, },
-					},
-					'autoGroupColumnDef': {
-						'headerName': 'Name',
-						'field': 'link',
-					},
-					'columnDefs': columnDefs,
-					'rowData': rowData,
-					'rowHeight': self.settings['row_height'],
-					'animateRows': True,
-					'suppressAggFuncInHeader': True,
-				}
-				self.open_tabs[file]['grid'] = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)')
-				self.open_tabs[file]['grid'].on('rowGroupOpened', wrap(func_tmp, self))
-				self.open_tabs[file]['grid'].on('cellDoubleClicked', wrap(func_select, self))
-				with ui.row().classes('w-full').style('gap: 0'):
-					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
-					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
+def main(gui: GUI):
+	import os
+	# enter loading mode
+	gui.mode_loading([{'name': file.split('.json5')[0]} for file in os.listdir() if file.split('.')[-1] == 'json5'])
+def setup(name: str, dir: str | None = None, settings_file='settings.yaml', *args):
+	'Main function, being "revised"'
+	import os
+	# change working directory to where file is located unless specified otherwise, just in case
+	os.chdir(dir or os.getcwd().replace('\\', '/'))
+	# setup gui
+	gui = GUI(load_settings(settings_file, default_settings))
+	# start gui
+	ui.page('/')(wrap(main, gui))
+	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'))
+def load_settings(settings_file: str, default_settings: str) -> dict:
+	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
+		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
+		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
+		i = 0; adding = set(); done = set()
+		while len(done) != len(file[start:]):  # while not all lines have been formatted
+			if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
+			for num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
+				if line[0:9] == '    null:': done.add(num)
+				if num in done: continue  # skip completed lines
+				if line[i] == '\n': done.add(num)  # add line's index to done when it reaches the end
+				elif num in adding and line[i + 1] != ' ': file[num] = line[0:i] + ' ' + line[i:]  # if line is in adding and next char is not ' ' then add space into line at i
+				elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(num)  # if elm endpoint is reached, add line into adding
+			i += 1  # increase column counter
+		with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
+
+	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
+	settings = yaml.load(default_settings.replace('\t', ''))  # set default_settings
+	try: file = open(settings_file, 'r'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
+	except FileNotFoundError as e: print(e)  # except: print error
+	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
+	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
 
 
 if __name__ in {"__main__", "__mp_main__"}:
@@ -364,6 +411,4 @@ if __name__ in {"__main__", "__mp_main__"}:
 	tracemalloc.start()
 
 	import sys
-	main(*sys.argv)
-
-	# print(test())
+	setup(*sys.argv)

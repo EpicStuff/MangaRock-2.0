@@ -1,8 +1,6 @@
 .vscode/
-__pycache__/
 Backup/
+__pycache__/
 main/
-tksvg0.7/
-tmp/
 v2/
 v3/

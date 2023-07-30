@@ -22,5 +22,13 @@
 		"author": "tester",
 		"links": ["https://example.com"],
 		"chapter": 2,
+	},
+	{
+		"format": "Manga",
+		"name": "Test 3",
+		"series": "testing",
+		"author": "tester",
+		"links": ["https://example.com/1", "https://example.com/2", "https://example.com/3"],
+		"chapter": 2,
 	}
 ]

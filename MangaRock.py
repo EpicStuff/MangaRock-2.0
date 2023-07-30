@@ -2,56 +2,85 @@
 # okay, heres the plan, make links its own separate object and have the links update individualy. when the updates, it will then update its parent's display
 import asyncio
 from nicegui import ui
-from typing import Callable
+from typing import Callable, Any, Iterable
 from functools import partial as wrap
+from stuff import Dict
+
 
 class Work():
 	''' Base Type class to be inherited by subclasses to give custom properties\n
 	Custom Book class Example: `class Book(Type): all = {}; prop = {'name': None, 'author': None, 'score': None, 'tags': []}`'''
-	prop = {'name': None}; all = []  # prop is short for properties, dict provided by sub object; all = list of all loaded obj/works of this class, eg = incase user wishes to iterate through all books
+	prop: dict = {'name': None}; all: list | dict = []  # prop is short for properties, dict provided by sub object; all = list of all loaded obj/works of this class, eg = incase user wishes to iterate through all books
 	def __init__(self, *args: list, **kwargs: dict) -> None:
 		'''Applies args and kwargs to `self.__dict__` if kwarg is in `self.prop`'''
-		kwargs.update({tuple(self.prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in {'', None, *kwargs.values()}})  # convert args into kwargs and update them to kwargs
-		if kwargs['name'] == '': kwargs['name'] = self.__class__.all.__len__  # if no name was provided use number as name
-		self.__dict__.update(self.prop); Type.all.append(self); self.__class__.all[kwargs['name']] = self  # set self properties to default property values; add self to Works.all; add self to it's class' all dict with name as key
-		for key, val in kwargs.items():  # for every kwarg given
-			if key in self.__dict__:  # if key of kwarg is in properties
-				if val.__class__ is tuple: val = list(val)  # if given val is a tuple then turn given val into a list
-				if val.__class__ is list and type(self.prop[key]) is not list:  # if given val is list and default val is not list then
-					if val.__len__ > 1: raise TypeError('unexpected multiple values within array')  # if multiple items in list then raise error
-					else: val = val[0]  # else unlist list
-				elif self.prop[key].__class__ is list and val.__class__ is not list: val = [val]  # if default val is list and given val is not list then put given val in a list
-				if self.prop[key].__class__ is int and val.__class__ is not float: val = float(val)  # if default val is float and given val is not float then float given val
-				self.__dict__.update({key: val})  # change self property value to given kwarg value
-
+		# convert args from list to dict then update them to kwargs
+		kwargs.update({tuple(self.prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in {'', None, *kwargs.values()}})  # type: ignore
+		# if no name was provided use number as name
+		if kwargs['name'] == '': kwargs['name'] = self.__class__.all.__len__  # type: ignore
+		# set self properties to default property values
+		self.__dict__.update(self.prop)
+		# add self to Works.all
+		Work.all.append(self)  # type: ignore
+		# add self to it's class' all dict with name as key
+		self.__class__.all[kwargs['name']] = self  # type: ignore
+		# for every kwarg given or from args, format it and update `self.__dict__` with it
+		for key, val in kwargs.items():
+			# if key of kwarg is in properties
+			if key in self.__dict__:
+				# if given val is a tuple then turn given val into a list
+				if val.__class__ is tuple: val = list(val)
+				# if given val is list and default val is not list then unlist list
+				if val.__class__ is list and type(self.prop[key]) is not list:
+					# if multiple items in list then raise error
+					if len(val) > 1:
+						raise TypeError('unexpected multiple values within array')
+					# else unlist list
+					else:
+						val = val[0]
+				# if default val is list and given val is not list then put given val in a list
+				elif self.prop[key].__class__ is list and val.__class__ is not list: val = [val]
+				# if default val is float and given val is not float then float given val
+				if self.prop[key].__class__ is int and type(val) is not float: val = float(val)
+				# change self property value to given kwarg value
+				self.__dict__.update({key: val})
+		# if self has links then turn links into Link objects
 		if 'links' in self.prop:
-			for num, link in enumerate(self.links):
-				self.links[num] = Link(link)
+			for num, link in enumerate(self.links):  # type: ignore
+				self.links[num] = Link(link)  # type: ignore
 	def update(self, what='chapter', source='links'):
 		self.__dict__[what] = max([link.latest for link in self.__dict__[source]])
 	@classmethod
-	def sort(cls, sort_by: str = 'name', look_up_table: dict = None, reverse: bool = True) -> None:
+	def sort(cls, sort_by: str = 'name', look_up_table: dict | None = None, reverse: bool = True) -> None:
 		'''sort `cls.all` by given dict, defaults to name'''
-		if type(cls.all) is list:
-			if sort_by == 'name':
-				cls.all.sort(key=lambda work: work.name, reverse=reverse)  # for each work in class.all sort by work.name, untested
-			else:
-				cls.all.sort(key=lambda work: look_up_table[work.__dict__[sort_by]], reverse=reverse)  # for each work in class.all get work.sort_by and convert into number through look up table
-		elif type(cls.all) is dict:
-			if sort_by == 'name':
-				cls.all = dict(sorted(cls.all.items(), lambda work: work[1].name, reverse=reverse))  # for each work in class.all sort by work.name, untested
-			else:
-				cls.all = dict(sorted(cls.all.items(), lambda work: look_up_table[work[1].__dict__[sort_by]], reverse=reverse))  # for each work in class.all get work.score and convert into number through look up table
-	@classmethod
+		works = cls.all
+		# if `works` is a dict, convert it to a list
+		if type(works) is dict:
+			works = works.values()
+		# sort
+		if sort_by == 'name':
+			# for each work in `works` sort by `work.name`
+			works.sort(key=lambda work: work.name, reverse=reverse)
+		elif look_up_table is not None:
+			# for each work in `works` get `work.sort_by` and convert into number through look up table
+			works.sort(key=lambda work: look_up_table[work.__dict__[sort_by]], reverse=reverse)
+		# if `cls.all` is a dict, convert it back to a dict
+		if type(cls.all) is dict:
+			work = {work.name: work for work in works}
+		cls.all = works
 	def __iter__(self) -> object: return self  # required for to iter over
-	def __str__(self) -> str: return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'  # returns self in str format
-	def __repr__(self) -> str: return f'<{self.name}>'  # represent self as self.name between <>
+	def __str__(self) -> str:
+		'returns `self` in `str` format'
+		return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'
+	def __repr__(self) -> str:
+		'represent `self` as `self.name` between <>'
+		return f'<{self.name}>'  # type: ignore
+class Manga(Work): all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
 class Link():
 	def __init__(self, link: str) -> None:
 		self.site = link.split('/')[2]
 		self.link = link
 		self.latest = ''
-	async def update(self, renderers, sites: dict) -> int | Exception:
+	async def update(self, renderers, sites: dict) -> float | Exception:
 		'Finds latest chapter from `self.link` then sets result or an error code to `self.latest`'
 		import re, bs4
 		from requests_html import AsyncHTMLSession
@@ -59,13 +88,13 @@ class Link():
 		# if site is supported
 		if self.site not in sites:
 			self.latest = Exception('site not supported')  # site not supported
-			return
+			return self.latest
 		# connecting to site
 		try:
 			link = await asession.get(self.link)  # connecting to the site
 		except Exception as e:  # connection error
 			self.latest = e
-			return
+			return e
 		# render site if necessary
 		try:
 			if sites[self.site][6]:  # if needs to be rendered
@@ -76,7 +105,7 @@ class Link():
 		except Exception as e:
 			print('failed to render: ', self.name, ' - ', self.site, ', ', e, sep='')  # render error
 			self.latest = e
-			return
+			return e
 
 		try:
 			link = bs4.BeautifulSoup(link.html.html, 'html.parser')  # link = bs4 object with link html
@@ -88,7 +117,7 @@ class Link():
 				link = link.find(sites[self.site][0], sites[self.site][1]).find(sites[self.site][2]).get(sites[self.site][3])  # else: get specified attribute of first specified tag under the first tag with specified attribute
 		except AttributeError as e:
 			self.latest = e  # parsing error
-			return
+			return e
 
 		try:
 			self.latest = float(re.split(sites[self.site][4], link)[sites[self.site][5]])  # else link parsing went fine: extract latest chapter from link using lookup table
@@ -97,32 +126,17 @@ class Link():
 
 		return self.latest
 class GUI():
-	def __init__(self, settings: dict) -> None:
-		self.jailbreak()
+	def __init__(self, settings: dict, files: list[dict[str, str]]) -> None:
+		# setup vars
 		self.settings = settings
-		self.tabs = ui.tabs().props('dense').on('update:model-value', self.switch_tab)
-		self.panels = ui.tab_panels(self.tabs)
-		self.open_tabs = {'Main': {}}
-		# setup semaphores for get latest chapters
-		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
-		ui.query('div').style('gap: 0')
-	def jailbreak(self, package: str = 'ag-grid-enterprise.min.js') -> None:
-		'upgrade aggrid from community to enterprise'
-		import pathlib
-		from nicegui.dependencies import js_dependencies
-		assert js_dependencies[0].dependents == {'aggrid'}, 'Overwriting NiceGUI aggrid ran into a tiny problem'
-		js_dependencies[0].path = pathlib.Path(package)
-	def switch_tab(self, event: dict) -> None:
-		self.tabs.props(f'model-value={event["args"]}')
-		self.panels.props(f'model-value={event["args"]}')
-	def mode_loading(self, files: list) -> None:
-		# create main tab
-		with self.tabs:
-			ui.tab('Main')
-		# switch to main tab
-		self.tabs.set_value('Main')
-		# create main panel
-		with self.panels:
+		self.open_tabs = Dict({'Main': Dict()})
+		# create tab holder
+		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs:
+			# create main tab
+			tab = ui.tab('Main')
+		# create panel holder
+		with ui.tab_panels(self.tabs, value=tab) as self.panels:
+			# create main panel
 			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
 				ui.label('Choose File: ')
 				gridOptions = {
@@ -136,21 +150,77 @@ class GUI():
 					'rowData': files,
 					'rowHeight': self.settings['row_height'],
 				}
-				self.open_tabs['Main']['grid'] = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', wrap(func_select, self))
+				self.open_tabs.Main.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', self.file_opened)
 				with ui.row().classes('w-full'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
+		# setup semaphores for get latest chapters
+		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
+		# css stuff
+		ui.query('div').style('gap: 0')
+	def jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
+		'upgrade aggrid from community to enterprise'
+		from nicegui.dependencies import register_library
+		from pathlib import Path
+		# check if targeted library is ag-grid-community
+		assert grid.libraries[0].name == 'ag-grid-community', 'Overwriting NiceGUI aggrid ran into a tiny problem, got wrong lib'
+		# if self.library does not exist, register library
+		try:
+			self.library
+		except AttributeError:
+			self.library = register_library(Path(package).resolve())
+		# overwrite aggrid library with enterprise
+		grid.libraries[0] = self.library
+		# return grid
+		return grid
+	def switch_tab(self, event: dict) -> None:
+		self.tabs.props(f'model-value={event["args"]}')
+		self.panels.props(f'model-value={event["args"]}')
 	def update_grid(self, grid: ui.aggrid, rows: list) -> None:
 		grid.call_api_method('setRowData', rows)
-	def mode_reading(self, file: str, columnDefs: list, rowData: list, func_select: Callable, func_tmp: Callable) -> None:
+	async def file_opened(self, event: dict) -> None:
+		def load_file(file: str) -> list | Any:
+			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
+			def add_work(format: str | Work, *args, **kwargs) -> Work:
+				'formats `Type` argument and returns the created object'
+				# if the format is a string, turn in into an object
+				if type(format) is str:
+					format = eval(format)
+				# return works object
+				return format(*args, **kwargs)  # type: ignore
+
+			with open(file, 'r') as f:
+				from json5 import load
+				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
+		# extract file name from event
+		file = event['args']['data']['name']
+		# if file allready open, switch to it
+		if file in self.open_tabs:
+			self.switch_tab({'args': file})
+			return
+		# get columns to display
+		cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
+		try:
+			for key, val in self.settings['to_display'][file].items():  # TODO: maybe turn into list comprehension
+				cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']})
+		except KeyError as e:
+			raise Exception('Columns for', e, 'has not been specified in settings.yaml')  # todo: setup default columns instead of crash
+		cols[-1]['resizable'] = False
+		# load works from file and refrence them in open_tabs
+		works = load_file(file + '.json5')
+		tab = self.open_tabs[file] = Dict({'works': works})
+		tab.reading = None
+		tab.open = ''
+		# generate rowData
+		rowData = self.generate_rowData(works, [])
+		# create and switch to tab for file
 		with self.tabs:
 			ui.tab(file)
-		# switch to (newly created) tab
 		self.switch_tab({'args': file})
-		# populate tab panel
+		# create panel for file
 		with self.panels:
 			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
-				self.open_tabs[file]['label'] = ui.label('Reading: ')
+				tab.label = ui.label('Reading: ')
 				gridOptions = {
 					'defaultColDef': {
 						'resizable': True,
@@ -161,18 +231,93 @@ class GUI():
 						'headerName': 'Name',
 						'field': 'link',
 					},
-					'columnDefs': columnDefs,
+					'columnDefs': cols,
 					'rowData': rowData,
 					'rowHeight': self.settings['row_height'],
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
 				}
-				self.open_tabs[file]['grid'] = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)')
-				self.open_tabs[file]['grid'].on('rowGroupOpened', wrap(func_tmp, self))
-				self.open_tabs[file]['grid'].on('cellDoubleClicked', wrap(func_select, self))
+				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)'))
+				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
+				tab.grid.on('cellDoubleClicked', wrap(self.work_selected, tab))
 				with ui.row().classes('w-full').style('gap: 0'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
+
+		await self.update_all(works, tab.grid)
+	def generate_rowData(self, works: Iterable, rows=[]):
+		for work in works:
+			if 'links' not in work.prop:
+				rows.append(work.__dict__)
+			elif work.links == []:
+				if self.settings['hide_works_with_no_links']:
+					continue
+				rows.append(work.__dict__)
+				continue
+			for link in work.links:
+				new_chapters = link.latest
+				if link.latest.__class__ is float:
+					new_chapters = link.latest - work.chapter
+					if new_chapters < 1 and self.settings['hide_unupdated_works']:
+						continue
+
+				tmp = work.__dict__.copy()
+				del tmp['links']
+				rows.append({'link': link.link, 'nChs': new_chapters, **tmp})
+		return rows
+	async def close_all_other(self, tab: Dict, event: dict):  # TODO: add more comments
+		if tab.open == event['args']['rowId']:
+			tab.open = None
+			return
+		# if this event was called by a row being closed, do nothing
+		if not await ui.run_javascript(f"getElement({event['id']}).gridOptions.api.getRowNode('{event['args']['rowId']}').expanded"):
+			return
+		# if something is previously open
+		if tab.open is not None:
+			# close previous open row
+			await ui.run_javascript(f'''
+				var grid = getElement({event['id']}).gridOptions.api;
+				var node = grid.getRowNode("{tab.open}");
+				grid.setRowNodeExpanded(node, false);
+			''', respond=False)
+		tab.open = event['args']['rowId']
+	async def work_selected(self, tab: Dict, event: dict):  # TODO: add comments
+		for tab, val in self.open_tabs.items():
+			if val['grid'].id == event['id']:
+				break
+
+		event = event['args']
+		if self.reading:
+			if event['colId'] == 'ag-Grid-AutoColumn':
+				work = tab.works[event['rowIndex']]
+				if work == self.reading:
+					work.update()
+					tab.label.set_text('Reading:')
+					self.reading = None
+					self.update_grid(tab.grid, self.generate_rowData(tab.works, []))
+					return
+			else:
+				return
+
+		if event['colId'] == 'ag-Grid-AutoColumn':
+			work = tab.works[event['rowIndex']]
+			await self.open_link(work.links[0].link)
+			tab.label.set_text('Reading: ' + work.name)
+			tab.reading = work
+	async def open_link(self, link: str) -> None:
+		await ui.run_javascript(f"window.open('{link}')", respond=False)
+	async def update_all(self, works: Iterable, grid: ui.aggrid) -> None:
+		'updates all works provided'
+		async def update_each(work: Work, grid: ui.aggrid) -> None:
+			if 'links' in work.prop:
+				for link in work.links:  # type: ignore
+					async with self.workers:
+						if __debug__: print('updating', link.link, '-', link.site)
+						await link.update(self.renderers, self.settings['sites'])
+						if __debug__: print('done updating', link.link, '-', link.site)
+					self.update_grid(grid, self.generate_rowData(works, []))
+
+		await asyncio.gather(*[update_each(work, grid) for work in works])
 
 
 default_settings = '''
@@ -210,178 +355,18 @@ sites: #site,                 find,  with,                       then_find, and 
     flamescans.org:    *008
     www.mcreader.net:  *011
 '''
-def main_old(name: str, dir=None, settings_file='settings.yaml', *args):
-	def jailbreak(package='ag-grid-enterprise.min.js') -> None:
-		'upgrade aggrid from community to enterprise'
-		import nicegui, pathlib
-		assert nicegui.dependencies.js_dependencies[0].dependents == {'aggrid'}, 'Overwriting NiceGUI aggrid ran into a tiny problem'
-		nicegui.dependencies.js_dependencies[0].path = pathlib.Path('ag-grid-enterprise.min.js')
-	def load_settings(settings_file: str, default_settings: str) -> dict:
-		def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
-			with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
-			start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
-			i = 0; adding = set(); done = set()
-			while len(done) != len(file[start:]):  # while not all lines have been formatted
-				if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
-				for num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
-					if line[0:9] == '    null:': done.add(num)
-					if num in done: continue  # skip completed lines
-					if line[i] == '\n': done.add(num)  # add line's index to done when it reaches the end
-					elif num in adding and line[i + 1] != ' ': file[num] = line[0:i] + ' ' + line[i:]  # if line is in adding and next char is not ' ' then add space into line at i
-					elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(num)  # if elm endpoint is reached, add line into adding
-				i += 1  # increase column counter
-			with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
-
-		import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
-		settings = yaml.load(default_settings.replace('\t', ''))  # set default_settings
-		try: file = open(settings_file, 'r'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
-		except FileNotFoundError as e: print(e)  # except: print error
-		with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
-		format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
-	async def enter_reading_mode_for_file(gui: GUI, file: dict) -> None:
-		def load_file(file: str) -> list:
-			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
-			def add_work(format: str | Type, *args, **kwargs) -> Type:
-				'formats `Type` argument and returns the created object'
-				if format.__class__ is str: format = eval(format)  # if the format is a string, turn in into an object
-				return format(*args, **kwargs)  # return works object
-
-			with open(file, 'r') as file:
-				from json5 import load
-				return load(file, object_hook=lambda kwargs: add_work(**kwargs))
-
-		print('testing')
-
-		file = file['args']['data']['name']
-		if file in gui.open_tabs:
-			gui.switch_tab({'args': file})
-			return
-
-		cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
-		try:
-			for key, val in gui.settings['to_display'][file].items():  # todo: maybe turn into list comprehension
-				cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': gui.settings['default_column_width']})
-		except KeyError as e:
-			print('Columns for', e, 'has not been specified in settings.yaml'); raise Exception  # todo: setup default columns instead of crash
-		cols[-1]['resizable'] = False
-
-		gui.open_tabs[file] = {'works': load_file(file + '.json5')}
-		gui.mode_reading(file, cols, generate_rowData(gui, gui.open_tabs[file]['works'], []), work_selected, close_all_other)
-
-		await update_all(gui, gui.open_tabs[file]['works'], gui.open_tabs[file]['grid'])
-	async def update_all(gui: GUI, works: list | tuple, grid: ui.aggrid) -> None:
-		'updates all works provided'
-		async def update_each(gui: GUI, work: Type, grid: ui.aggrid) -> None:
-			if 'links' in work.prop:
-				for link in work.links:
-					async with gui.workers:
-						if __debug__: print('updating', link.link, '-', link.site)
-						await link.update(gui.renderers, gui.settings['sites'])
-						if __debug__: print('done updating', link.link, '-', link.site)
-					gui.update_grid(grid, generate_rowData(gui, works, []))
-
-		# if __debug__ and input('update all? (y/n) ') == 'y':
-		if True:
-			await asyncio.gather(*[update_each(gui, work, grid) for work in works])
-	def generate_rowData(gui: GUI, works: list, rows=[]):
-		for work in works:
-			if 'links' not in work.prop:
-				rows.append(work.__dict__)
-			elif work.links == []:
-				if gui.settings['hide_works_with_no_links']:
-					continue
-				rows.append(work.__dict__)
-				continue
-			for link in work.links:
-				new_chapters = link.latest
-				if link.latest.__class__ is float:
-					new_chapters = link.latest - work.chapter
-					if new_chapters < 1 and gui.settings['hide_unupdated_works']:
-						continue
-
-				tmp = work.__dict__.copy()
-				del tmp['links']
-				rows.append({'link': link.link, 'nChs': new_chapters, **tmp})
-		return rows
-	async def close_all_other(gui: GUI, event: dict):
-		if gui.open == event['args']['rowId']:
-			gui.open = None
-			return
-		# if this event was called by a row being closed, do nothing
-		if not await ui.run_javascript(f"getElement({event['id']}).gridOptions.api.getRowNode('{event['args']['rowId']}').expanded"):
-			return
-		# if something is previously open
-		if gui.open is not None:
-			# close previous open row
-			await ui.run_javascript(f'''
-				var grid = getElement({event['id']}).gridOptions.api;
-				var node = grid.getRowNode("{gui.open}");
-				grid.setRowNodeExpanded(node, false);
-			''', respond=False)
-		gui.open = event['args']['rowId']
-	async def work_selected(gui: GUI, event: dict):
-		print('\n', event)
-
-		for tab, val in gui.open_tabs.items():
-			if val['grid'].id == event['id']:
-				break
-
-		event = event['args']
-		if gui.reading:
-			if event['colId'] == 'ag-Grid-AutoColumn':
-				work = gui.open_tabs[tab]['works'][event['rowIndex']]
-				if work == gui.reading:
-					work.update()
-					gui.open_tabs[tab]['label'].set_text('Reading:')
-					gui.reading = None
-					gui.update_grid(gui.open_tabs[tab]['grid'], generate_rowData(gui, gui.open_tabs[tab]['works'], []))
-					return
-			else:
-				return
-
-		if event['colId'] == 'ag-Grid-AutoColumn':
-			work = gui.open_tabs[tab]['works'][event['rowIndex']]
-			await open_link(work.links[0].link)
-			gui.open_tabs[tab]['label'].set_text('Reading: ' + work.name)
-			gui.reading = work
-	async def open_link(link: str) -> None:
-		await ui.run_javascript(f"window.open('{link}')", respond=False)
-	import os
-	# change working directory to where file is located unless specified otherwise, just in case
-	if not dir:
-		dir = os.getcwd().replace('\\', '/')
-	os.chdir(dir)
-	# setup gui and semaphores for get latest chapters
-	settings = load_settings(settings_file, default_settings)
-	jail_break()
-	gui = GUI(settings)
-	gui.workers = asyncio.Semaphore(gui.settings['workers']); gui.renderers = asyncio.Semaphore(gui.settings['renderers'])
-	# setup loading mode
-	files = [{'name': file.split('.json5')[0]} for file in os.listdir() if file.split('.')[-1] == 'json5']
-	gui.mode_loading(files, enter_reading_mode_for_file)
-	# enter_reading_mode_for_file gets called by gui.mode_loading when a file is selected
-	# update_all gets called by enter_reading_mode_for_file once it its done
-
-	# ill move this somewhere else later
-	gui.reading = None
-	gui.open = ''
-
-	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=1)
-
-def main(gui: GUI):
-	import os
-	# enter loading mode
-	gui.mode_loading([{'name': file.split('.json5')[0]} for file in os.listdir() if file.split('.')[-1] == 'json5'])
-def setup(name: str, dir: str | None = None, settings_file='settings.yaml', *args):
+def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args):
 	'Main function, being "revised"'
 	import os
 	# change working directory to where file is located unless specified otherwise, just in case
-	os.chdir(dir or os.getcwd().replace('\\', '/'))
+	os.chdir(dir or os.path.dirname(os.path.realpath(__file__)))
+	if __debug__: print(f'working directory: {os.getcwd()}')
 	# setup gui
-	gui = GUI(load_settings(settings_file, default_settings))
+	settings = load_settings(settings_file, default_settings)
+	files = [{'name': file.split('.json5')[0]} for file in os.listdir() if file.split('.')[-1] == 'json5']
+	gui = GUI(settings, files)
 	# start gui
-	ui.page('/')(wrap(main, gui))
-	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'))
+	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
 def load_settings(settings_file: str, default_settings: str) -> dict:
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
@@ -407,8 +392,10 @@ def load_settings(settings_file: str, default_settings: str) -> dict:
 
 
 if __name__ in {"__main__", "__mp_main__"}:
-	import tracemalloc
-	tracemalloc.start()
+	# import tracemalloc
+	# from multiprocessing import freeze_support
+	# tracemalloc.start()
+	# freeze_support()
 
 	import sys
-	setup(*sys.argv)
+	main(*sys.argv)  # TODO: find out whats causing page to be blank when reload=True, maybe: https://github.com/zauberzeug/nicegui/issues/72

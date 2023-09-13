@@ -1,31 +1,57 @@
 from nicegui import ui
+from nicegui.dependencies import register_library
+from pathlib import Path
+from MangaRock import load_settings
 
-def jailbreak(self, package: str = 'v3/ag-grid-enterprise.min.js') -> None:  # TODO: fix jailbreak broken due to 1.3.0 update
+library = register_library(Path('v3/ag-grid-enterprise.min.js').resolve())
+
+def jailbreak(grid: ui.aggrid) -> ui.aggrid:
 	'upgrade aggrid from community to enterprise'
-	import pathlib
-	from nicegui.dependencies import libraries
-	lib = libraries[next(iter(libraries))]
-	assert lib.name == 'ag-grid-community', 'Overwriting NiceGUI aggrid ran into a tiny problem, got wrong lib'
-	lib.path = pathlib.Path(package).resolve()
+	# check if targeted library is ag-grid-community
+	assert grid.libraries[0].name == 'ag-grid-community', 'Overwriting NiceGUI aggrid ran into a tiny problem, got wrong lib'
+	# overwrite aggrid library with enterprise
+	grid.libraries[0] = library
+	# return grid
+	return grid
+def format_row(row: dict, settings: dict) -> dict:
+	'format row to make grouping work'
+	if 'series' not in row:
+		row['series'] = row['name']
+		row['name'] = row['link']
+		row['link'] = ' '
+	if 'author' not in row:
+		row['author'] = row['series']
+		row['series'] = row['name']
+		row['name'] = row['link']
+		row['link'] = ' '
+	return row
 
 
-def jail_break(package='v3/ag-grid-enterprise.min.js') -> None:
-	import nicegui, pathlib
-	assert nicegui.dependencies.js_dependencies[0].dependents == {'aggrid'}, 'Overwriting NiceGUI aggrid ran into a tiny problem'
-	nicegui.dependencies.js_dependencies[0].path = pathlib.Path(package)
+settings = load_settings('v3/settings.yaml')
 
-
-# jail_break()
-# jailbreak(1)
-# from nicegui.dependencies import libraries
-
-
-columnDefs = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
-rowData = [
-	{'link': 1},
-	{'link': 2},
-	{'link': 3},
+# cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True}]
+cols = []
+for key, val in settings['to_display']['example'].items():  # TODO: maybe turn into list comprehension
+	if val[1] == 'group':
+		cols.append({'headerName': val[0], 'field': key, 'rowGroup': True, 'hide': True})
+	else:
+		cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': settings['default_column_width']})
+rows = [
+	{'link': 'https://chapmanganato.com/manga-mq990225', 'nChs': '', 'name': 'I Am the Fated Villain', 'chapter': 10.0, 'series': None, 'author': None, 'score': 'Great', 'tags': ['strong lead']},
+	# {'link': 'https://example.com', 'nChs': '', 'name': 'Test 1', 'chapter': 1.0, 'series': 'testing', 'author': 'tester', 'score': None, 'tags': []},
+	# {'link': 'https://example.com', 'nChs': '', 'name': 'Test 2', 'chapter': 2.0, 'series': 'testing', 'author': 'tester', 'score': None, 'tags': []},
+	# {'link': 'https://example.com/1', 'nChs': '', 'name': 'Test 3', 'chapter': 2.0, 'series': 'testing', 'author': 'tester', 'score': None, 'tags': []},
+	# {'link': 'https://example.com/2', 'nChs': '', 'name': 'Test 3', 'chapter': 2.0, 'series': 'testing', 'author': 'tester', 'score': None, 'tags': []},
+	# {'link': 'https://example.com/3', 'nChs': '', 'name': 'Test 3', 'chapter': 2.0, 'series': 'testing', 'author': 'tester', 'score': None, 'tags': []},
+	{
+		'author': 'author',
+		'series': 'series',
+		'name': 'name',
+		'link': 'link'}
 ]
+
+rows = [format_row(row, settings) for row in rows]
+
 gridOptions = {
 	'defaultColDef': {
 		'resizable': True,
@@ -36,8 +62,8 @@ gridOptions = {
 		'headerName': 'Name',
 		'field': 'link',
 	},
-	'columnDefs': columnDefs,
-	'rowData': rowData,
+	'columnDefs': cols,
+	'rowData': rows,
 	'rowHeight': 32,
 	'animateRows': True,
 	'suppressAggFuncInHeader': True,
@@ -45,11 +71,6 @@ gridOptions = {
 
 ui.label('test')
 grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)')
-
-from nicegui.dependencies import register_library
-from pathlib import Path
-grid.libraries = [register_library(Path('v3/ag-grid-enterprise.min.js'))]
-
-grid2 = ui.aggrid({})
+jailbreak(grid)
 
 ui.run(dark=True)

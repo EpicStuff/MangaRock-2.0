@@ -2,7 +2,8 @@
 # okay, heres the plan, make links its own separate object and have the links update individualy. when the updates, it will then update its parent's display
 import asyncio
 from nicegui import ui
-from typing import Callable, Any, Iterable
+from nicegui.events import GenericEventArguments
+from typing import Any, Iterable
 from functools import partial as wrap
 from stuff import Dict
 
@@ -150,11 +151,11 @@ class GUI():
 					'rowData': files,
 					'rowHeight': self.settings['row_height'],
 				}
-				self.open_tabs.Main.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', self.file_opened)
+				self.open_tabs.Main.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', self._file_opened)
 				with ui.row().classes('w-full'):
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
-		# setup semaphores for get latest chapters
+		# setup semaphores for `update_all()`
 		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
 		# css stuff
 		ui.query('div').style('gap: 0')
@@ -178,73 +179,6 @@ class GUI():
 		self.panels.props(f'model-value={event["args"]}')
 	def update_grid(self, grid: ui.aggrid, rows: list) -> None:
 		grid.call_api_method('setRowData', rows)
-	async def file_opened(self, event: dict) -> None:
-		def load_file(file: str) -> list | Any:
-			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
-			def add_work(format: str | Work, *args, **kwargs) -> Work:
-				'formats `Type` argument and returns the created object'
-				# if the format is a string, turn in into an object
-				if type(format) is str:
-					format = eval(format)
-				# return works object
-				return format(*args, **kwargs)  # type: ignore
-
-			with open(file, 'r') as f:
-				from json5 import load
-				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
-		# extract file name from event
-		file = event['args']['data']['name']
-		# if file allready open, switch to it
-		if file in self.open_tabs:
-			self.switch_tab({'args': file})
-			return
-		# get columns to display
-		cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True},]
-		try:
-			for key, val in self.settings['to_display'][file].items():  # TODO: maybe turn into list comprehension
-				cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']})
-		except KeyError as e:
-			raise Exception('Columns for', e, 'has not been specified in settings.yaml')  # todo: setup default columns instead of crash
-		cols[-1]['resizable'] = False
-		# load works from file and refrence them in open_tabs
-		works = load_file(file + '.json5')
-		tab = self.open_tabs[file] = Dict({'works': works})
-		tab.reading = None
-		tab.open = ''
-		# generate rowData
-		rowData = self.generate_rowData(works, [])
-		# create and switch to tab for file
-		with self.tabs:
-			ui.tab(file)
-		self.switch_tab({'args': file})
-		# create panel for file
-		with self.panels:
-			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
-				tab.label = ui.label('Reading: ')
-				gridOptions = {
-					'defaultColDef': {
-						'resizable': True,
-						'suppressMenu': True,
-						'cellRendererParams': {'suppressCount': True, },
-					},
-					'autoGroupColumnDef': {
-						'headerName': 'Name',
-						'field': 'link',
-					},
-					'columnDefs': cols,
-					'rowData': rowData,
-					'rowHeight': self.settings['row_height'],
-					'animateRows': True,
-					'suppressAggFuncInHeader': True,
-				}
-				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)'))
-				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
-				tab.grid.on('cellDoubleClicked', wrap(self.work_selected, tab))
-				with ui.row().classes('w-full').style('gap: 0'):
-					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
-					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
-
-		await self.update_all(works, tab.grid)
 	def generate_rowData(self, works: Iterable, rows=[]):
 		for work in works:
 			if 'links' not in work.prop:
@@ -265,35 +199,156 @@ class GUI():
 				del tmp['links']
 				rows.append({'link': link.link, 'nChs': new_chapters, **tmp})
 		return rows
-	async def close_all_other(self, tab: Dict, event: dict):  # TODO: add more comments
-		if tab.open == event['args']['rowId']:
-			tab.open = None
+	def format_rowData(self, row: dict) -> dict:
+		'format row to make grouping work, "shuffles" the "data" "up" if "entry" "above" is empty'  # TODO: make this work with custom columns defined in settings
+		if 'series' not in row or row['series'] is None:
+			row['series'] = row['name']
+			row['name'] = row['link']
+			row['link'] = ' '
+		if 'author' not in row or row['author'] is None:
+			row['author'] = row['series']
+			row['series'] = row['name']
+			row['name'] = row['link']
+			row['link'] = ' '
+		return row
+	async def _file_opened(self, event: dict) -> None:
+		'runs when a file is selected in the main tab, creates a new tab for the file'
+		def load_file(file: str) -> list | Any:
+			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
+			def add_work(format: str | Work, *args, **kwargs) -> Work:
+				'formats `Type` argument and returns the created object'
+				# if the format is a string, turn in into an object
+				if type(format) is str:
+					format = eval(format)
+				# return works object
+				return format(*args, **kwargs)  # type: ignore
+
+			with open(file, 'r', encoding='utf8') as f:
+				from json5 import load
+				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
+		# extract file name from event
+		file = event['args']['data']['name']
+		# if file allready open, switch to it
+		if file in self.open_tabs:
+			self.switch_tab({'args': file})
 			return
-		# if this event was called by a row being closed, do nothing
-		if not await ui.run_javascript(f"getElement({event['id']}).gridOptions.api.getRowNode('{event['args']['rowId']}').expanded"):
-			return
-		# if something is previously open
-		if tab.open is not None:
-			# close previous open row
+		# get columns to display
+		cols = []
+		try:
+			for key, val in self.settings['to_display'][file].items():  # TODO: maybe turn into list comprehension
+				if val[1] == 'group':
+					if val[0] == 'hide':
+						cols.append({'headerName': key, 'field': key, 'rowGroup': True})
+					else:
+						cols.append({'headerName': val[0], 'field': key, 'rowGroup': True, 'hide': True})
+				else:
+					cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']})
+		except KeyError as e:
+			raise Exception('Columns for', e, 'has not been specified in settings.yaml')  # todo: setup default columns instead of crash
+		cols[-1]['resizable'] = False
+		# load works from file and refrence them in open_tabs
+		works = load_file(file + '.json5')
+		tab = self.open_tabs[file] = Dict({'works': works})
+		tab.reading = None
+		tab.open = set()
+		# generate rowData
+		rows = self.generate_rowData(works, [])
+		rows = [self.format_rowData(row) for row in rows]
+		# create and switch to tab for file
+		with self.tabs:
+			ui.tab(file)
+		self.switch_tab({'args': file})
+		# create panel for file
+		with self.panels:
+			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+				tab.label = ui.label('Reading: ')
+				gridOptions = {
+					'defaultColDef': {
+						'resizable': True,
+						'suppressMenu': True,
+						'cellRendererParams': {'suppressCount': True, },
+					},
+					# 'autoGroupColumnDef': {
+					# 	'headerName': 'Name',
+					# 	'field': 'link',
+					# },
+					'columnDefs': cols,
+					'rowData': rows,
+					'rowHeight': self.settings['row_height'],
+					'animateRows': True,
+					'suppressAggFuncInHeader': True,
+					# 'groupDisplayType': 'multipleColumns',n
+
+				}
+				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)'))
+				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
+				tab.grid.on('cellDoubleClicked', wrap(self.work_selected, tab))
+				with ui.row().classes('w-full').style('gap: 0'):
+					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
+					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
+		# update all works
+		# await self.update_all(works, tab.grid)
+	async def close_all_other(self, tab: Dict, event: GenericEventArguments):  # TODO: add more comments
+		'is called whenever a row is opened'
+		tab_opened = event.args['rowId']
+		# if the row being opened is empty, unopen
+		child = await ui.run_javascript(f'''
+			var grid = getElement({event.sender.id}).gridOptions.api;
+			var node = grid.getRowNode("{tab_opened}");
+			return node.childrenAfterSort[0].key
+		''')
+		if child in {None, ' '}:
 			await ui.run_javascript(f'''
-				var grid = getElement({event['id']}).gridOptions.api;
-				var node = grid.getRowNode("{tab.open}");
+				var grid = getElement({event.sender.id}).gridOptions.api;
+				var node = grid.getRowNode("{tab_opened}");
 				grid.setRowNodeExpanded(node, false);
 			''', respond=False)
-		tab.open = event['args']['rowId']
-	async def work_selected(self, tab: Dict, event: dict):  # TODO: add comments
-		for tab, val in self.open_tabs.items():
-			if val['grid'].id == event['id']:
+			return
+		# if the row being opened is a child of the currently opened row, do nothing
+		parent = await ui.run_javascript(f'''
+			var grid = getElement({event.sender.id}).gridOptions.api;
+			var node = grid.getRowNode("{tab_opened}");
+			return node.parent.id;
+		''')
+		if parent in tab.open:
+			tab.open.add(tab_opened)
+			return
+		# if event was caused by (assumidly) closing the opened row, take note of it and `return`
+		if tab_opened in tab.open:
+			tab.open.remove(tab_opened)
+			return
+		# if this event was called by a row being (auto) closed, do nothing
+		if not await ui.run_javascript(f"getElement({event.sender.id}).gridOptions.api.getRowNode('{tab_opened}').expanded"):
+			return
+		# # if something is previously open
+		# if tab.open == {}:
+		if True:  # tmp
+			# close all previous open row
+			for open_tab in tab.open:
+				await ui.run_javascript(f'''
+					var grid = getElement({event.sender.id}).gridOptions.api;
+					var node = grid.getRowNode("{open_tab}");
+					grid.setRowNodeExpanded(node, false);
+				''', respond=False)
+		# set new open to row
+		tab.open.add(tab_opened)
+	async def work_selected(self, tab: Dict, event: GenericEventArguments):  # TODO: add comments
+		'runs when a work is selected'
+		# cycles through tabs until it matches the tab that the grid is in
+		for tab in self.open_tabs.values():
+			if tab.grid.id == event.sender.id:
 				break
 
-		event = event['args']
-		if self.reading:
+		# stuff
+		event = event.args
+
+		if tab.reading:
 			if event['colId'] == 'ag-Grid-AutoColumn':
 				work = tab.works[event['rowIndex']]
-				if work == self.reading:
+				if work == tab.reading:
 					work.update()
 					tab.label.set_text('Reading:')
-					self.reading = None
+					tab.reading = None
 					self.update_grid(tab.grid, self.generate_rowData(tab.works, []))
 					return
 			else:
@@ -308,6 +363,7 @@ class GUI():
 		await ui.run_javascript(f"window.open('{link}')", respond=False)
 	async def update_all(self, works: Iterable, grid: ui.aggrid) -> None:
 		'updates all works provided'
+		if __debug__: return
 		async def update_each(work: Work, grid: ui.aggrid) -> None:
 			if 'links' in work.prop:
 				for link in work.links:  # type: ignore
@@ -367,7 +423,7 @@ def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args
 	gui = GUI(settings, files)
 	# start gui
 	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
-def load_settings(settings_file: str, default_settings: str) -> dict:
+def load_settings(settings_file: str, default_settings: str = default_settings) -> dict:
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
 		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
@@ -385,7 +441,7 @@ def load_settings(settings_file: str, default_settings: str) -> dict:
 
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
 	settings = yaml.load(default_settings.replace('\t', ''))  # set default_settings
-	try: file = open(settings_file, 'r'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
+	try: file = open(settings_file, 'r', encoding='utf8'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
 	except FileNotFoundError as e: print(e)  # except: print error
 	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
 	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings

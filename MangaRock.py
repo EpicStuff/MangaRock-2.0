@@ -292,24 +292,15 @@ class GUI():
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
 		# if the row being opened is empty, unopen
-		child = await ui.run_javascript(f'''
-			var grid = getElement({event.sender.id}).gridOptions.api;
-			var node = grid.getRowNode("{tab_opened}");
-			return node.childrenAfterSort[0].key
-		''')
+		child = await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").childrenAfterSort[0].key')
 		if child in {None, ' '}:
 			await ui.run_javascript(f'''
 				var grid = getElement({event.sender.id}).gridOptions.api;
-				var node = grid.getRowNode("{tab_opened}");
-				grid.setRowNodeExpanded(node, false);
+				grid.setRowNodeExpanded(grid.getRowNode("{tab_opened}"), false);
 			''', respond=False)
 			return
 		# if the row being opened is a child of the currently opened row, do nothing
-		parent = await ui.run_javascript(f'''
-			var grid = getElement({event.sender.id}).gridOptions.api;
-			var node = grid.getRowNode("{tab_opened}");
-			return node.parent.id;
-		''')
+		parent = await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").parent.id')
 		if parent in tab.open:
 			tab.open.add(tab_opened)
 			return
@@ -327,8 +318,7 @@ class GUI():
 			for open_tab in tab.open:
 				await ui.run_javascript(f'''
 					var grid = getElement({event.sender.id}).gridOptions.api;
-					var node = grid.getRowNode("{open_tab}");
-					grid.setRowNodeExpanded(node, false);
+					grid.setRowNodeExpanded(grid.getRowNode("{open_tab}"), false);
 				''', respond=False)
 		# set new open to row
 		tab.open.add(tab_opened)
@@ -422,7 +412,7 @@ def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args
 	files = [{'name': file.split('.json5')[0]} for file in os.listdir() if file.split('.')[-1] == 'json5']
 	gui = GUI(settings, files)
 	# start gui
-	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
+	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=True)
 def load_settings(settings_file: str, default_settings: str = default_settings) -> dict:
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file

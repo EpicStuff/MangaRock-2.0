@@ -179,38 +179,49 @@ class GUI():
 		self.panels.props(f'model-value={event["args"]}')
 	def update_grid(self, grid: ui.aggrid, rows: list) -> None:
 		grid.call_api_method('setRowData', rows)
-	def generate_rowData(self, works: Iterable, rows=[]):
-		for work in works:
+	def generate_rowData(self, works: Iterable, rows: list) -> list:
+		'turns list of works into list of rows that aggrid can use and group'
+		def format_rowData(row: dict) -> dict:
+			'format row to make grouping work, "shuffles" the "data" "up" if "entry" "above" is empty'
+			row['link'] += '‎'
+			row['name'] += '‏'
+			# TODO: make this work with custom columns defined in settings
+			if 'series' not in row or row['series'] is None:
+				row['series'] = row['name']
+				row['name'] = row['link']
+				row['link'] = ' '
+			if 'author' not in row or row['author'] is None:
+				row['author'] = row['series']
+				row['series'] = row['name']
+				row['name'] = row['link']
+				row['link'] = ' '
+			return row
+		# for each work in works
+		for num_work, work in enumerate(works):
+			# if type of work has no links
 			if 'links' not in work.prop:
+				# add work to rows
 				rows.append(work.__dict__)
+				rows[-1]['id'] = num_work  # this line may be redundant
+			# if work has no links
 			elif work.links == []:
+				# if hide_works_with_no_links then skip this work
 				if self.settings['hide_works_with_no_links']:
 					continue
+				# else add work to rows
 				rows.append(work.__dict__)
+				rows[-1]['id'] = num_work  # this line may be redundant
 				continue
-			for link in work.links:
+			for num_link, link in enumerate(work.links):
 				new_chapters = link.latest
-				if link.latest.__class__ is float:
+				if new_chapters.__class__ in {float, int}:
 					new_chapters = link.latest - work.chapter
 					if new_chapters < 1 and self.settings['hide_unupdated_works']:
 						continue
-
 				tmp = work.__dict__.copy()
 				del tmp['links']
-				rows.append({'link': link.link, 'nChs': new_chapters, **tmp})
-		return rows
-	def format_rowData(self, row: dict) -> dict:
-		'format row to make grouping work, "shuffles" the "data" "up" if "entry" "above" is empty'  # TODO: make this work with custom columns defined in settings
-		if 'series' not in row or row['series'] is None:
-			row['series'] = row['name']
-			row['name'] = row['link']
-			row['link'] = ' '
-		if 'author' not in row or row['author'] is None:
-			row['author'] = row['series']
-			row['series'] = row['name']
-			row['name'] = row['link']
-			row['link'] = ' '
-		return row
+				rows.append({'id': (num_work, num_link), 'link': link.link, 'nChs': new_chapters, **tmp})
+		return [format_rowData(row) for row in rows]
 	async def _file_opened(self, event: dict) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
@@ -233,14 +244,11 @@ class GUI():
 			self.switch_tab({'args': file})
 			return
 		# get columns to display
-		cols = []
+		cols = [{'field': 'id', 'aggFunc': 'first', 'hide': True}]
 		try:
 			for key, val in self.settings['to_display'][file].items():  # TODO: maybe turn into list comprehension
 				if val[1] == 'group':
-					if val[0] == 'hide':
-						cols.append({'headerName': key, 'field': key, 'rowGroup': True})
-					else:
-						cols.append({'headerName': val[0], 'field': key, 'rowGroup': True, 'hide': True})
+					cols.append({'field': key, 'rowGroup': True, 'hide': True})
 				else:
 					cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']})
 		except KeyError as e:
@@ -253,7 +261,6 @@ class GUI():
 		tab.open = set()
 		# generate rowData
 		rows = self.generate_rowData(works, [])
-		rows = [self.format_rowData(row) for row in rows]
 		# create and switch to tab for file
 		with self.tabs:
 			ui.tab(file)
@@ -268,17 +275,15 @@ class GUI():
 						'suppressMenu': True,
 						'cellRendererParams': {'suppressCount': True, },
 					},
-					# 'autoGroupColumnDef': {
-					# 	'headerName': 'Name',
-					# 	'field': 'link',
-					# },
+					'autoGroupColumnDef': {
+						'headerName': 'Name',
+						'field': 'link',
+					},
 					'columnDefs': cols,
 					'rowData': rows,
 					'rowHeight': self.settings['row_height'],
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
-					# 'groupDisplayType': 'multipleColumns',n
-
 				}
 				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)'))
 				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
@@ -291,64 +296,107 @@ class GUI():
 	async def close_all_other(self, tab: Dict, event: GenericEventArguments):  # TODO: add more comments
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
-		# if the row being opened is empty, unopen
-		child = await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").childrenAfterSort[0].key')
-		if child in {None, ' '}:
-			await ui.run_javascript(f'''
-				var grid = getElement({event.sender.id}).gridOptions.api;
-				grid.setRowNodeExpanded(grid.getRowNode("{tab_opened}"), false);
-			''', respond=False)
-			return
+		# if the row being opened is "empty"
+		if await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").childrenAfterSort[0].key') in {None, ' '}:
+			# if not (the child of the row being opened has "valid" data instead of key)
+			if not await ui.run_javascript(f'''
+				var child = getElement({event.sender.id}).gridOptions.api.getRowNode('{tab_opened}').childrenAfterSort[0]
+				return ('data' in child) && (child.data.link != ' ')
+			'''):
+				# close the row being opened
+				await ui.run_javascript(f'''
+					var grid = getElement({event.sender.id}).gridOptions.api;
+					grid.setRowNodeExpanded(grid.getRowNode("{tab_opened}"), false);
+				''', respond=False)
+				return
 		# if the row being opened is a child of the currently opened row, do nothing
-		parent = await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").parent.id')
-		if parent in tab.open:
-			tab.open.add(tab_opened)
-			return
+		elif await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").parent.id') in tab.open:
+			pass
+			# TODO: make this work to "advanced grouped rows", opening a sub row does not close the other opened sub rows of the same parent
 		# if event was caused by (assumidly) closing the opened row, take note of it and `return`
-		if tab_opened in tab.open:
+		elif tab_opened in tab.open:
 			tab.open.remove(tab_opened)
 			return
 		# if this event was called by a row being (auto) closed, do nothing
-		if not await ui.run_javascript(f"getElement({event.sender.id}).gridOptions.api.getRowNode('{tab_opened}').expanded"):
+		elif not await ui.run_javascript(f"getElement({event.sender.id}).gridOptions.api.getRowNode('{tab_opened}').expanded"):
 			return
-		# # if something is previously open
-		# if tab.open == {}:
-		if True:  # tmp
-			# close all previous open row
+		# else close all previous open row
+		else:
 			for open_tab in tab.open:
 				await ui.run_javascript(f'''
 					var grid = getElement({event.sender.id}).gridOptions.api;
 					grid.setRowNodeExpanded(grid.getRowNode("{open_tab}"), false);
 				''', respond=False)
-		# set new open to row
+		# set open to new opened row
 		tab.open.add(tab_opened)
 	async def work_selected(self, tab: Dict, event: GenericEventArguments):  # TODO: add comments
 		'runs when a work is selected'
-		# cycles through tabs until it matches the tab that the grid is in
-		for tab in self.open_tabs.values():
-			if tab.grid.id == event.sender.id:
-				break
-
+		# get ending of row text and id
+		try:
+			value, id = await ui.run_javascript(f'''
+				var node = getElement({event.sender.id}).gridOptions.api.getRowNode('{event.args['rowId']}')
+				return [node.key, node.aggData.id]
+			''')
+		except TimeoutError:
+			value, id = await ui.run_javascript(f'''
+				var node = getElement({event.sender.id}).gridOptions.api.getRowNode('{event.args['rowId']}')
+				return [node.data.link, node.data.id]
+			''')
+		# if neither name nor link was selected, do nothing
+		if value[-1] not in {'‎', '‏'}:
+			return
 		# stuff
 		event = event.args
-
+		# if reading
 		if tab.reading:
-			if event['colId'] == 'ag-Grid-AutoColumn':
-				work = tab.works[event['rowIndex']]
-				if work == tab.reading:
-					work.update()
-					tab.label.set_text('Reading:')
+			# get work
+			work = tab.works[id[0]]
+			# if link is selected
+			if value[-1] == '‎':
+				link = work.links[id[1]]
+				# if same link is reselected or previous selected is a work and link selected is first  
+				if link == tab.reading or (issubclass(tab.reading.__class__, Work) and link == tab.reading.links[0]):
+					# set work's chapter the link's latest chapter
+					work.chapter = link.latest
+					# TODO: deal with the case that the link has not been updated yet
 					tab.reading = None
-					self.update_grid(tab.grid, self.generate_rowData(tab.works, []))
-					return
+			# if name is selected
 			else:
+				# if same work is reselected or work selected is parent of reading link
+				if work == tab.reading or tab.reading in work.links:
+					# set work's chapter to latest chapter
+					work.update()
+					tab.reading = None
+			# if no longer reading
+			if not tab.reading:
+				# change label
+				tab.label.set_text('Reading:')
+				# update grid
+				self.update_grid(tab.grid, self.generate_rowData(tab.works, []))
 				return
+		# if not reading or diffrent work is selected
+		tab.reading = tab.works[id[0]]
+		# change label
+		tab.label.set_text('Reading: ' + tab.reading.name)
+		# if is link
+		if value[-1] == '‎':
+			# set reading to link
+			tab.reading = tab.reading.links[id[1]]
+			# open link
+			await self.open_link(value)
+		# if is name
+		elif value[-1] == '‏':
+			# open link
+			await self.open_link(tab.reading.links[0].link)
 
-		if event['colId'] == 'ag-Grid-AutoColumn':
-			work = tab.works[event['rowIndex']]
-			await self.open_link(work.links[0].link)
-			tab.label.set_text('Reading: ' + work.name)
-			tab.reading = work
+			# work = tab.works[event['rowIndex']]
+			# if work == tab.reading:
+			# 	work.update()
+			# 	tab.label.set_text('Reading:')
+			# 	tab.reading = None
+			# 	self.update_grid(tab.grid, self.generate_rowData(tab.works, []))
+			# 	return
+
 	async def open_link(self, link: str) -> None:
 		await ui.run_javascript(f"window.open('{link}')", respond=False)
 	async def update_all(self, works: Iterable, grid: ui.aggrid) -> None:

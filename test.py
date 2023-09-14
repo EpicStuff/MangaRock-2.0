@@ -15,11 +15,11 @@ def jailbreak(grid: ui.aggrid) -> ui.aggrid:
 	return grid
 def format_row(row: dict, settings: dict) -> dict:
 	'format row to make grouping work'
-	if 'series' not in row:
+	if 'series' not in row or row['series'] is None:
 		row['series'] = row['name']
 		row['name'] = row['link']
 		row['link'] = ' '
-	if 'author' not in row:
+	if 'author' not in row or row['author'] is None:
 		row['author'] = row['series']
 		row['series'] = row['name']
 		row['name'] = row['link']
@@ -29,25 +29,34 @@ def format_row(row: dict, settings: dict) -> dict:
 
 settings = load_settings('v3/settings.yaml')
 
-# cols = [{'headerName': 'Name', 'field': 'name', 'rowGroup': True, 'hide': True}]
-cols = []
+cols = [{'field': 'id', 'aggFunc': 'first'}]
+# cols = []
 for key, val in settings['to_display']['example'].items():  # TODO: maybe turn into list comprehension
 	if val[1] == 'group':
-		cols.append({'headerName': val[0], 'field': key, 'rowGroup': True, 'hide': True})
+		cols.append({'field': key, 'rowGroup': True, 'hide': True})
 	else:
 		cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': settings['default_column_width']})
 rows = [
-	{'link': 'https://chapmanganato.com/manga-mq990225', 'nChs': '', 'name': 'I Am the Fated Villain', 'chapter': 10.0, 'series': None, 'author': None, 'score': 'Great', 'tags': ['strong lead']},
+	{'link': 'https://chapmanganato.com/manga-mq990225', 'nChs': '', 'name': 'I Am the Fated Villain', 'chapter': 10.0, 'series': None, 'author': None, 'score': 'Great', 'tags': ['strong lead'], 'id': 0},
 	# {'link': 'https://example.com', 'nChs': '', 'name': 'Test 1', 'chapter': 1.0, 'series': 'testing', 'author': 'tester', 'score': None, 'tags': []},
 	# {'link': 'https://example.com', 'nChs': '', 'name': 'Test 2', 'chapter': 2.0, 'series': 'testing', 'author': 'tester', 'score': None, 'tags': []},
 	# {'link': 'https://example.com/1', 'nChs': '', 'name': 'Test 3', 'chapter': 2.0, 'series': 'testing', 'author': 'tester', 'score': None, 'tags': []},
 	# {'link': 'https://example.com/2', 'nChs': '', 'name': 'Test 3', 'chapter': 2.0, 'series': 'testing', 'author': 'tester', 'score': None, 'tags': []},
 	# {'link': 'https://example.com/3', 'nChs': '', 'name': 'Test 3', 'chapter': 2.0, 'series': 'testing', 'author': 'tester', 'score': None, 'tags': []},
 	{
-		'author': 'author',
-		'series': 'series',
-		'name': 'name',
-		'link': 'link'}
+		'author': 'author‎',
+		# 'series': 'series',
+		'name': 'name 1',
+		'link': 'link 1',
+		'id': 1
+	},
+	{
+		'author': 'author‎',
+		'series': 'series‏',
+		'name': 'name 2',
+		'link': 'link 2',
+		'id': 2
+	}
 ]
 
 rows = [format_row(row, settings) for row in rows]

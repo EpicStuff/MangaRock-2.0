@@ -2,15 +2,22 @@
 	{
 		"format": "Manga",
 		"name": "I Am the Fated Villain",
-		"links": ["https://chapmanganato.com/manga-mq990225"],
+		"links": ["https://chapmanganato.com/manga-mq990225", "https://mangabuddy.com/i-am-the-fated-villain"],
 		"chapter": 10,
 		"score": "Great",
 		"tags": ["strong lead"]
 	},
 	{
 		"format": "Manga",
+		"name": "Everlasting God of Sword",
+		"links": ["https://www.mangaread.org/manga/everlasting-god-of-sword/"],
+		"chapter": 100,
+		"score": "Great",
+		"tags": ["strong lead"]
+	},
+	{
+		"format": "Manga",
 		"name": "name: Test 1",
-		"series": "test: series",
 		"author": "test: author",
 		"links": ["//link 1"],
 		"chapter": 1,

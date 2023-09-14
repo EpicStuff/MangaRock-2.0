@@ -175,26 +175,31 @@ class GUI():
 		# return grid
 		return grid
 	def switch_tab(self, event: dict) -> None:
-		self.tabs.props(f'model-value={event["args"]}')
-		self.panels.props(f'model-value={event["args"]}')
+		self.tabs.props(f"model-value={event['args']}")
+		self.panels.props(f"model-value={event['args']}")
 	def update_grid(self, grid: ui.aggrid, rows: list) -> None:
 		grid.call_api_method('setRowData', rows)
-	def generate_rowData(self, works: Iterable, rows: list) -> list:
+	def generate_rowData(self, works: Iterable, rows: list, tab: str) -> list:
 		'turns list of works into list of rows that aggrid can use and group'
-		def format_rowData(row: dict) -> dict:
+		def format_rowData(row: dict, cols: dict) -> dict:
 			'format row to make grouping work, "shuffles" the "data" "up" if "entry" "above" is empty'
+			# remove the columns that are not grouped
+			cols = dict(cols)
+			for key, val in cols.copy().items():
+				if val[1] != 'group':
+					del cols[key]
+			cols = list(cols.keys()) + ['link']
+			# add link, name identifiers
 			row['link'] += '‎'
 			row['name'] += '‏'
-			# TODO: make this work with custom columns defined in settings
-			if 'series' not in row or row['series'] is None:
-				row['series'] = row['name']
-				row['name'] = row['link']
-				row['link'] = ' '
-			if 'author' not in row or row['author'] is None:
-				row['author'] = row['series']
-				row['series'] = row['name']
-				row['name'] = row['link']
-				row['link'] = ' '
+			# shuffle "row"s "up"
+			for col in range(len(cols)):  # for each col
+				while row[cols[col]] is None:  # while the col is empty
+					# shuffle cols "up"
+					for mod in range(col, len(cols) - 1):
+						row[cols[mod]] = row[cols[mod + 1]]
+					# set last col to empty
+					row[cols[-1]] = ' '
 			return row
 		# for each work in works
 		for num_work, work in enumerate(works):
@@ -221,8 +226,8 @@ class GUI():
 				tmp = work.__dict__.copy()
 				del tmp['links']
 				rows.append({'id': (num_work, num_link), 'link': link.link, 'nChs': new_chapters, **tmp})
-		return [format_rowData(row) for row in rows]
-	async def _file_opened(self, event: dict) -> None:
+		return [format_rowData(row, self.settings['to_display'][tab]) for row in rows]
+	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
@@ -238,7 +243,7 @@ class GUI():
 				from json5 import load
 				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
 		# extract file name from event
-		file = event['args']['data']['name']
+		file = event.args['data']['name']
 		# if file allready open, switch to it
 		if file in self.open_tabs:
 			self.switch_tab({'args': file})
@@ -260,7 +265,7 @@ class GUI():
 		tab.reading = None
 		tab.open = set()
 		# generate rowData
-		rows = self.generate_rowData(works, [])
+		rows = self.generate_rowData(works, [], file)
 		# create and switch to tab for file
 		with self.tabs:
 			ui.tab(file)
@@ -354,7 +359,7 @@ class GUI():
 			# if link is selected
 			if value[-1] == '‎':
 				link = work.links[id[1]]
-				# if same link is reselected or previous selected is a work and link selected is first  
+				# if same link is reselected or previous selected is a work and link selected is first
 				if link == tab.reading or (issubclass(tab.reading.__class__, Work) and link == tab.reading.links[0]):
 					# set work's chapter the link's latest chapter
 					work.chapter = link.latest

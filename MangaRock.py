@@ -243,7 +243,7 @@ class GUI():
 				return format(*args, **kwargs)  # type: ignore
 
 			with open(file, 'r', encoding='utf8') as f:
-				from json5 import load
+				from json import load
 				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
 		# extract file name from event
 		file = event.args['data']['name']
@@ -263,7 +263,7 @@ class GUI():
 			raise Exception('Columns for', e, 'has not been specified in settings.yaml')  # TODO: setup default columns instead of crash
 		cols[-1]['resizable'] = False
 		# load works from file and refrence them in open_tabs
-		works = load_file(file + '.json5')
+		works = load_file(file + '.json')
 		tab = self.open_tabs[file] = Dict({'works': works})
 		tab.reading = None
 		tab.open = set()
@@ -464,7 +464,7 @@ def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args
 	if __debug__: print(f'working directory: {os.getcwd()}')
 	# setup gui
 	settings = load_settings(settings_file, default_settings)
-	files = [{'name': file.split('.json5')[0]} for file in os.listdir() if file.split('.')[-1] == 'json5']
+	files = [{'name': file.split('.json')[0]} for file in os.listdir() if file.split('.')[-1] == 'json']
 	gui = GUI(settings, files)
 	# start gui
 	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=True)

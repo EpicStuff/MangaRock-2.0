@@ -4,10 +4,11 @@ default_column_width: 16
 row_height: 32
 to_display: # culumns to display for each Type, do not include name (it's required and auto included)
     example: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+    Manga: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
 workers: 3
 renderers: 1
 hide_unupdated_works: true # default: true
-hide_works_with_no_links: false # default: true
+hide_works_with_no_links: true # default: true
 sort_by: score # defulat: score
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
@@ -24,6 +25,7 @@ sites: #site,                 find,  with,                       then_find, and 
     mangapuma.com:      &009 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
     bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
     www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+    mangabuddy.com:     [div,        class: latest-chapters,     a,         href,          '-',      -1,       false]
     null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011] # for formatting reasons
     chapmanganato.com:  *001
     readmanganato.com:  *001

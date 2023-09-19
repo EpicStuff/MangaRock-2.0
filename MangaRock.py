@@ -174,9 +174,9 @@ class GUI():
 		grid.libraries[0] = self.library
 		# return grid
 		return grid
-	def switch_tab(self, event: dict) -> None:
-		self.tabs.props(f"model-value={event['args']}")
-		self.panels.props(f"model-value={event['args']}")
+	def switch_tab(self, event: GenericEventArguments | Dict) -> None:
+		self.tabs.props(f"model-value={event.args}")
+		self.panels.props(f"model-value={event.args}")
 	def update_grid(self, grid: ui.aggrid, rows: list) -> None:
 		grid.call_api_method('setRowData', rows)
 	def generate_rowData(self, works: Iterable, rows: list, tab: str) -> list:
@@ -190,7 +190,10 @@ class GUI():
 					del cols[key]
 			cols = list(cols.keys()) + ['link']
 			# add link, name identifiers
-			row['link'] += '‎'
+			try:
+				row['link'] += '‎'
+			except KeyError:  # if row is not a link
+				cols = cols[:-1]  # remove link from cols
 			row['name'] += '‏'
 			# shuffle "row"s "up"
 			for col in range(len(cols)):  # for each col
@@ -246,7 +249,7 @@ class GUI():
 		file = event.args['data']['name']
 		# if file allready open, switch to it
 		if file in self.open_tabs:
-			self.switch_tab({'args': file})
+			self.switch_tab(Dict({'args': file}))
 			return
 		# get columns to display
 		cols = [{'field': 'id', 'aggFunc': 'first', 'hide': True}]
@@ -257,7 +260,7 @@ class GUI():
 				else:
 					cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']})
 		except KeyError as e:
-			raise Exception('Columns for', e, 'has not been specified in settings.yaml')  # todo: setup default columns instead of crash
+			raise Exception('Columns for', e, 'has not been specified in settings.yaml')  # TODO: setup default columns instead of crash
 		cols[-1]['resizable'] = False
 		# load works from file and refrence them in open_tabs
 		works = load_file(file + '.json5')
@@ -269,7 +272,7 @@ class GUI():
 		# create and switch to tab for file
 		with self.tabs:
 			ui.tab(file)
-		self.switch_tab({'args': file})
+		self.switch_tab(Dict({'args': file}))
 		# create panel for file
 		with self.panels:
 			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
@@ -297,7 +300,7 @@ class GUI():
 					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
 		# update all works
-		# await self.update_all(works, tab.grid)
+		await self.update_all(works, tab.grid, file)
 	async def close_all_other(self, tab: Dict, event: GenericEventArguments):  # TODO: add more comments
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
@@ -404,17 +407,16 @@ class GUI():
 
 	async def open_link(self, link: str) -> None:
 		await ui.run_javascript(f"window.open('{link}')", respond=False)
-	async def update_all(self, works: Iterable, grid: ui.aggrid) -> None:
+	async def update_all(self, works: Iterable, grid: ui.aggrid, tab: str) -> None:
 		'updates all works provided'
-		if __debug__: return
 		async def update_each(work: Work, grid: ui.aggrid) -> None:
 			if 'links' in work.prop:
 				for link in work.links:  # type: ignore
 					async with self.workers:
 						if __debug__: print('updating', link.link, '-', link.site)
-						await link.update(self.renderers, self.settings['sites'])
-						if __debug__: print('done updating', link.link, '-', link.site)
-					self.update_grid(grid, self.generate_rowData(works, []))
+						latest = await link.update(self.renderers, self.settings['sites'])
+						if __debug__: print('done updating', link.link, '-', link.site, 'lchs:', latest)
+					self.update_grid(grid, self.generate_rowData(works, [], tab))
 
 		await asyncio.gather(*[update_each(work, grid) for work in works])
 
@@ -497,4 +499,4 @@ if __name__ in {"__main__", "__mp_main__"}:
 	# freeze_support()
 
 	import sys
-	main(*sys.argv)  # TODO: find out whats causing page to be blank when reload=True, maybe: https://github.com/zauberzeug/nicegui/issues/72
+	main(*sys.argv)

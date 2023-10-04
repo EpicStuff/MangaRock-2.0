@@ -49,7 +49,10 @@ class Work():
 			for num, link in enumerate(self.links):  # type: ignore
 				self.links[num] = Link(link, self)  # type: ignore
 	def update(self, what='chapter', source='links'):
-		self.__dict__[what] = max([link.latest for link in self.__dict__[source]])
+		self.__dict__[what] = max([link.latest for link in self.__dict__[source] if not issubclass(link.latest.__class__, Exception)])
+		if what == 'chapter' and source == 'links':
+			for link in self.links:
+				link.re()
 	@classmethod
 	def sort(cls, sort_by: str = 'name', look_up_table: dict | None = None, reverse: bool = True) -> None:
 		'''sort `cls.all` by given dict, defaults to name'''
@@ -82,23 +85,34 @@ class Link():
 		self.link = link
 		self.parent = parent
 		self.new = self.latest = ''
-	async def update(self, renderers, sites: dict, chapter: float) -> float | Exception:
-		'Finds latest chapter from `self.link` then sets result or an error code to `self.latest`'
+	async def update(self, renderers, sites: dict, asession) -> float | Exception:
+		'''Finds latest chapter from `self.link` then sets result or an error code to `self.latest`
+		# Error Codes:
+			-999.1 = site not supported
+			-999.2 = Connection Error
+			-999.3 = rendering error, probably timeout
+			-999.4 = parsing error
+			-999.5 = whatever was extracted was not a number'''
 		import re, bs4
-		from requests_html import AsyncHTMLSession
-		asession = AsyncHTMLSession()
+		# if "special" tags are in link, skip
+		if 'tags' in self.parent.prop:
+			tags = self.parent.tags
+			if ('do not check for updates' in tags) or ('Complete' in tags and 'Read' in tags) or ('Oneshot' in tags and 'Read' in tags) or ('Two Shot' in tags and 'Read' in tags):
+				self.latest = Exception('skiped')
+				return self.re(0)
+		# tmp: special stuff for bato.to
+		if self.site == 'bato.to': link = self.link.replace('title/', 'rss/series/') + '.xml'
 		# if site is supported
 		if self.site not in sites:
 			self.latest = Exception('site not supported')  # site not supported
-			self.new = -99
-			return -99
+			return self.re(-999.1)
 		# connecting to site
 		try:
 			link = await asession.get(self.link)  # connecting to the site
+			assert link.ok  # make sure connection was successful
 		except Exception as e:  # connection error
 			self.latest = e
-			self.new = -99
-			return -99
+			return self.re(-999.2)
 		# render site if necessary
 		try:
 			if sites[self.site][6]:  # if needs to be rendered
@@ -109,8 +123,7 @@ class Link():
 		except Exception as e:
 			print('failed to render: ', self.link, ' - ', self.site, ', ', e, sep='')  # render error
 			self.latest = e
-			self.new = -99
-			return -99
+			return self.re(-999.3)
 
 		try:
 			link = bs4.BeautifulSoup(link.html.html, 'html.parser')  # link = bs4 object with link html
@@ -122,18 +135,24 @@ class Link():
 				link = link.find(sites[self.site][0], sites[self.site][1]).find(sites[self.site][2]).get(sites[self.site][3])  # else: get specified attribute of first specified tag under the first tag with specified attribute
 		except AttributeError as e:
 			self.latest = e  # parsing error
-			self.new = -99
-			return -99
+			return self.re(-999.4)
 
 		try:
 			self.latest = float(re.split(sites[self.site][4], link)[sites[self.site][5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 		except Exception as e:
 			self.latest = e  # whatever was extracted was not a number
-			self.new = -99
-			return -99
+			return self.re(-999.5)
 
-		self.new = self.latest - chapter
-		return self.new
+		return self.re()
+	def re(self, new: int | float = None) -> int | float:
+		'updates `self.new` from `new` arg or calculates if not provided, then returns `self.new`'
+		if new is None:
+			if not issubclass(self.latest.__class__, Exception):
+				new = round(self.latest - self.parent.chapter, 4)
+			else:
+				new = self.new
+		self.new = new
+		return new
 	def __repr__(self) -> str:
 		'represent `self` as `self.link` between <>'
 		return f'<{self.link}>'  # type: ignore
@@ -143,7 +162,7 @@ class GUI():
 	def __init__(self, settings: dict, files: list[dict[str, str]]) -> None:
 		# setup vars
 		self.settings = settings
-		self.open_tabs = Dict({'Main': Dict()})
+		self.open_tabs = Dict({'Main': Dict({'name': 'Main'})})
 		self.commands = {'/help': 'help', '/debug': 'debug'}
 		# create tab holder
 		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs:
@@ -173,7 +192,7 @@ class GUI():
 		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
 		# css stuff and stuff
 		ui.query('div').style('gap: 0')
-		app.on_connect(self.on_reload)
+		app.on_connect(self._on_reload)
 	def jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
 		'upgrade aggrid from community to enterprise'
 		from nicegui.dependencies import register_library
@@ -195,7 +214,7 @@ class GUI():
 	def switch_tab(self, event: GenericEventArguments | Dict) -> None:
 		self.tabs.props(f"model-value={event.args}")
 		self.panels.props(f"model-value={event.args}")
-	def generate_rowData(self, works: Iterable, rows: list, tab: str) -> list:
+	def generate_rowData(self, works: Iterable, rows: list, tab_name: str) -> list:
 		'turns list of works into list of rows that aggrid can use and group'
 		def format_rowData(row: dict, cols: dict) -> dict:
 			'format row to make grouping work, "shuffles" the "data" "up" if "entry" "above" is empty'
@@ -246,7 +265,7 @@ class GUI():
 				tmp = work.__dict__.copy()
 				del tmp['links']
 				rows.append({'id': (num_work, num_link), 'link': link.link, 'nChs': link.new, **tmp})
-		return [format_rowData(row, self.settings['to_display'][tab]) for row in rows]
+		return [format_rowData(row, self.settings['to_display'][tab_name]) for row in rows]
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
@@ -281,7 +300,7 @@ class GUI():
 		cols[-1]['resizable'] = False
 		# load works from file and refrence them in open_tabs
 		works = load_file(file + '.json')
-		tab = self.open_tabs[file] = Dict({'works': works, 'links': {}})
+		tab = self.open_tabs[file] = Dict({'name': file, 'works': works, 'links': {}})
 		tab.reading = None
 		tab.open = set()
 		# create links dict with "index" of link
@@ -403,7 +422,7 @@ class GUI():
 				# change label
 				tab.label.set_text('Reading:')
 				# update grid
-				self.update_grid(tab.grid, self.generate_rowData(tab.works, []))
+				self.re_grid(tab)
 				return
 		# if not reading or diffrent work is selected
 		tab.reading = tab.works[id[0]]
@@ -431,6 +450,7 @@ class GUI():
 		await ui.run_javascript(f"window.open('{link}')", respond=False)
 	async def update_all(self, works: Iterable, tab: Dict) -> None:
 		'updates all works provided'
+		from requests_html import AsyncHTMLSession
 		async def update_each(work: Work, tab: Dict) -> None:
 			async_fix()
 			if 'links' in work.prop:
@@ -439,9 +459,9 @@ class GUI():
 						# if debug tab open
 						if 'debug' in self.open_tabs:
 							self.open_tabs.debug.updating.add_rows({'name': link.link})
-						new = await link.update(self.renderers, self.settings['sites'], work.chapter)
+						new = await link.update(self.renderers, self.settings['sites'], asession)
 						# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
-						if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (new == -99 and self.settings['hide_updates_with_errors']):
+						if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
 							await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
 						else:
 							await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
@@ -450,8 +470,16 @@ class GUI():
 							self.open_tabs.debug.updating.remove_rows({'name': link.link})
 							self.open_tabs.debug.done.add_rows({'name': link.link})
 
+		asession = AsyncHTMLSession()
 		await asyncio.gather(*[update_each(work, tab) for work in works])
+		print('done updating')
 
+	# def update_row(self, ):
+	# 	# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
+	# 	if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
+	# 		await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
+	# 	else:
+	# 		await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
 	async def handle_input(self, event: GenericEventArguments):
 		# if is a command
 		if event.sender.value[0] == '/':
@@ -490,10 +518,15 @@ class GUI():
 					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
 		# switch to tab
 		self.switch_tab(Dict({'args': 'Debug'}))
-	def on_reload(self):
-		for tab in self.open_tabs:
-			if tab not in {'Main', 'Debug'}:
-				self.open_tabs[tab].grid.call_api_method('setRowData', self.generate_rowData(self.open_tabs[tab].works, [], tab))
+	def _on_reload(self):
+		for tab_name in self.open_tabs:
+			if tab_name not in {'Main', 'Debug'}:
+				self.re_grid(tab_name=tab_name)
+	def re_grid(self, tab: Dict = None, tab_name: str = None) -> None:
+		'reloads the grid of the specified tab'
+		if tab is None:
+			tab = self.open_tabs[tab_name]
+		tab.grid.call_api_method('setRowData', self.generate_rowData(tab.works, [], tab.name))
 
 
 default_settings = '''
@@ -521,7 +554,7 @@ sites: #site,                    find,        with,                        then_
     mangapuma.com:               &005 [div,   id: chapter-list-inner,      a,         href,           '-',      -1,       false]
     www.manga-raw.club:          &006 [ul,    class: chapter-list,         a,         href,           -|/,      -4,       false]
     zahard.xyz:                  &007 [ul,    class: chapters,             a,         href,           /,        -1,       false]
-    manganato.com:               &008 [ul,    class: row-content-chapter', a,         href,           '-',      -1,       false]
+    manganato.com:               &008 [ul,    class: row-content-chapter,  a,         href,           '-',      -1,       false]
     flamescans.org:              &009 [span,  class: epcur epcurlast,      None,      None,           ' ',      1,        false]
     null: [*001, *002, *003, *004, *005, *006, *007, *008, *009]
     www.mcreader.net:            *006
@@ -541,7 +574,7 @@ def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args
 	files = [{'name': file.split('.json')[0]} for file in os.listdir() if file.split('.')[-1] == 'json']
 	gui = GUI(settings, files)
 	# start gui
-	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=True)
+	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
 def load_settings(settings_file: str, default_settings: str = default_settings) -> dict:
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file

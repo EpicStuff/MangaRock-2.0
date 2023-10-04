@@ -1,7 +1,7 @@
 # Version: 3.3.1
 # okay, heres the plan, make links its own separate object and have the links update individualy. when the updates, it will then update its parent's display
 import asyncio
-from nicegui import ui
+from nicegui import app, ui
 from nicegui.events import GenericEventArguments
 from typing import Any, Iterable
 from functools import partial as wrap
@@ -47,7 +47,7 @@ class Work():
 		# if self has links then turn links into Link objects
 		if 'links' in self.prop:
 			for num, link in enumerate(self.links):  # type: ignore
-				self.links[num] = Link(link)  # type: ignore
+				self.links[num] = Link(link, self)  # type: ignore
 	def update(self, what='chapter', source='links'):
 		self.__dict__[what] = max([link.latest for link in self.__dict__[source]])
 	@classmethod
@@ -77,11 +77,12 @@ class Work():
 		return f'<{self.name}>'  # type: ignore
 class Manga(Work): all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
 class Link():
-	def __init__(self, link: str) -> None:
+	def __init__(self, link: str, parent: Work) -> None:
 		self.site = link.split('/')[2]
 		self.link = link
-		self.latest = ''
-	async def update(self, renderers, sites: dict) -> float | Exception:
+		self.parent = parent
+		self.new = self.latest = ''
+	async def update(self, renderers, sites: dict, chapter: float) -> float | Exception:
 		'Finds latest chapter from `self.link` then sets result or an error code to `self.latest`'
 		import re, bs4
 		from requests_html import AsyncHTMLSession
@@ -89,13 +90,15 @@ class Link():
 		# if site is supported
 		if self.site not in sites:
 			self.latest = Exception('site not supported')  # site not supported
-			return self.latest
+			self.new = -99
+			return -99
 		# connecting to site
 		try:
 			link = await asession.get(self.link)  # connecting to the site
 		except Exception as e:  # connection error
 			self.latest = e
-			return e
+			self.new = -99
+			return -99
 		# render site if necessary
 		try:
 			if sites[self.site][6]:  # if needs to be rendered
@@ -104,9 +107,10 @@ class Link():
 					await link.html.arender(retries=2, wait=1, sleep=2, timeout=20, reload=True)
 				if __debug__: print('done rendering', self.link, '-', self.site)
 		except Exception as e:
-			print('failed to render: ', self.name, ' - ', self.site, ', ', e, sep='')  # render error
+			print('failed to render: ', self.link, ' - ', self.site, ', ', e, sep='')  # render error
 			self.latest = e
-			return e
+			self.new = -99
+			return -99
 
 		try:
 			link = bs4.BeautifulSoup(link.html.html, 'html.parser')  # link = bs4 object with link html
@@ -118,19 +122,29 @@ class Link():
 				link = link.find(sites[self.site][0], sites[self.site][1]).find(sites[self.site][2]).get(sites[self.site][3])  # else: get specified attribute of first specified tag under the first tag with specified attribute
 		except AttributeError as e:
 			self.latest = e  # parsing error
-			return e
+			self.new = -99
+			return -99
 
 		try:
 			self.latest = float(re.split(sites[self.site][4], link)[sites[self.site][5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 		except Exception as e:
 			self.latest = e  # whatever was extracted was not a number
+			self.new = -99
+			return -99
 
-		return self.latest
+		self.new = self.latest - chapter
+		return self.new
+	def __repr__(self) -> str:
+		'represent `self` as `self.link` between <>'
+		return f'<{self.link}>'  # type: ignore
 class GUI():
+	def _input(self) -> ui.input:
+		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self.handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 	def __init__(self, settings: dict, files: list[dict[str, str]]) -> None:
 		# setup vars
 		self.settings = settings
 		self.open_tabs = Dict({'Main': Dict()})
+		self.commands = {'/help': 'help', '/debug': 'debug'}
 		# create tab holder
 		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs:
 			# create main tab
@@ -153,16 +167,20 @@ class GUI():
 				}
 				self.open_tabs.Main.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', self._file_opened)
 				with ui.row().classes('w-full'):
-					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
+					self._input()
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
 		# setup semaphores for `update_all()`
 		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
-		# css stuff
+		# css stuff and stuff
 		ui.query('div').style('gap: 0')
+		app.on_connect(self.on_reload)
 	def jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
 		'upgrade aggrid from community to enterprise'
 		from nicegui.dependencies import register_library
 		from pathlib import Path
+		# if allready jailbroken, return grid
+		if grid.libraries[0].name == 'ag-grid-enterprise':
+			return grid
 		# check if targeted library is ag-grid-community
 		assert grid.libraries[0].name == 'ag-grid-community', 'Overwriting NiceGUI aggrid ran into a tiny problem, got wrong lib'
 		# if self.library does not exist, register library
@@ -177,8 +195,6 @@ class GUI():
 	def switch_tab(self, event: GenericEventArguments | Dict) -> None:
 		self.tabs.props(f"model-value={event.args}")
 		self.panels.props(f"model-value={event.args}")
-	def update_grid(self, grid: ui.aggrid, rows: list) -> None:
-		grid.call_api_method('setRowData', rows)
 	def generate_rowData(self, works: Iterable, rows: list, tab: str) -> list:
 		'turns list of works into list of rows that aggrid can use and group'
 		def format_rowData(row: dict, cols: dict) -> dict:
@@ -220,15 +236,16 @@ class GUI():
 				rows.append(work.__dict__)
 				rows[-1]['id'] = num_work  # this line may be redundant
 				continue
+			# for each link in work
 			for num_link, link in enumerate(work.links):
-				new_chapters = link.latest
-				if new_chapters.__class__ in {float, int}:
-					new_chapters = link.latest - work.chapter
-					if new_chapters < 1 and self.settings['hide_unupdated_works']:
-						continue
+				# if link has updated and has no new chapters and hide_unupdated_works
+				if link.new != '' and link.new == 0 and self.settings['hide_unupdated_works']:
+					# skip this link
+					continue
+				# process link and add it to rows
 				tmp = work.__dict__.copy()
 				del tmp['links']
-				rows.append({'id': (num_work, num_link), 'link': link.link, 'nChs': new_chapters, **tmp})
+				rows.append({'id': (num_work, num_link), 'link': link.link, 'nChs': link.new, **tmp})
 		return [format_rowData(row, self.settings['to_display'][tab]) for row in rows]
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
@@ -264,9 +281,15 @@ class GUI():
 		cols[-1]['resizable'] = False
 		# load works from file and refrence them in open_tabs
 		works = load_file(file + '.json')
-		tab = self.open_tabs[file] = Dict({'works': works})
+		tab = self.open_tabs[file] = Dict({'works': works, 'links': {}})
 		tab.reading = None
 		tab.open = set()
+		# create links dict with "index" of link
+		num = 0
+		for work in works:
+			for link in work.links:
+				tab.links[link.link] = num
+				num += 1
 		# generate rowData
 		rows = self.generate_rowData(works, [], file)
 		# create and switch to tab for file
@@ -297,10 +320,10 @@ class GUI():
 				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
 				tab.grid.on('cellDoubleClicked', wrap(self.work_selected, tab))
 				with ui.row().classes('w-full').style('gap: 0'):
-					ui.input().props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
+					self._input()  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
 		# update all works
-		await self.update_all(works, tab.grid, file)
+		await self.update_all(works, tab)
 	async def close_all_other(self, tab: Dict, event: GenericEventArguments):  # TODO: add more comments
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
@@ -404,57 +427,108 @@ class GUI():
 			# 	tab.reading = None
 			# 	self.update_grid(tab.grid, self.generate_rowData(tab.works, []))
 			# 	return
-
 	async def open_link(self, link: str) -> None:
 		await ui.run_javascript(f"window.open('{link}')", respond=False)
-	async def update_all(self, works: Iterable, grid: ui.aggrid, tab: str) -> None:
+	async def update_all(self, works: Iterable, tab: Dict) -> None:
 		'updates all works provided'
-		async def update_each(work: Work, grid: ui.aggrid) -> None:
+		async def update_each(work: Work, tab: Dict) -> None:
+			async_fix()
 			if 'links' in work.prop:
 				for link in work.links:  # type: ignore
 					async with self.workers:
-						if __debug__: print('updating', link.link, '-', link.site)
-						latest = await link.update(self.renderers, self.settings['sites'])
-						if __debug__: print('done updating', link.link, '-', link.site, 'lchs:', latest)
-					self.update_grid(grid, self.generate_rowData(works, [], tab))
+						# if debug tab open
+						if 'debug' in self.open_tabs:
+							self.open_tabs.debug.updating.add_rows({'name': link.link})
+						new = await link.update(self.renderers, self.settings['sites'], work.chapter)
+						# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
+						if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (new == -99 and self.settings['hide_updates_with_errors']):
+							await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
+						else:
+							await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
+						# if debug tab open
+						if 'debug' in self.open_tabs:
+							self.open_tabs.debug.updating.remove_rows({'name': link.link})
+							self.open_tabs.debug.done.add_rows({'name': link.link})
 
-		await asyncio.gather(*[update_each(work, grid) for work in works])
+		await asyncio.gather(*[update_each(work, tab) for work in works])
+
+	async def handle_input(self, event: GenericEventArguments):
+		# if is a command
+		if event.sender.value[0] == '/':
+			# if is help command
+			if event.sender.value == '/help':
+				print([f"{key}: {val}" for key, val in self.commands.items()])
+			# if is debug command
+			elif event.sender.value == '/debug':
+				self.debug()
+			# if is reload command
+			elif event.sender.value == '/reload':
+				name = self.tabs._props['model-value']
+				# if is not the main tab
+				if name != 'Main':
+					await self.update_all(self.open_tabs.example.works, self.open_tabs[name])
+			elif event.sender.value == '/tmp':
+				name = self.tabs._props['model-value']
+				self.open_tabs[name].grid.call_api_method('setRowData', self.generate_rowData(self.open_tabs[name].works, [], name))
+		# clear input
+		event.sender.set_value(None)
+	def debug(self):
+		'opens debug tab'
+		# if debug tab is allready open, switch to it
+		if 'debug' in self.open_tabs:
+			self.switch_tab(Dict({'args': 'Debug'}))
+			return
+		# else create tab
+		self.open_tabs.debug = Dict()
+		with self.tabs:
+			ui.tab('Debug')
+		with self.panels:
+			with ui.tab_panel('Debug').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+				ui.label('Updating:')
+				with ui.row().classes('w-full'):
+					self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
+					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
+		# switch to tab
+		self.switch_tab(Dict({'args': 'Debug'}))
+	def on_reload(self):
+		for tab in self.open_tabs:
+			if tab not in {'Main', 'Debug'}:
+				self.open_tabs[tab].grid.call_api_method('setRowData', self.generate_rowData(self.open_tabs[tab].works, [], tab))
 
 
 default_settings = '''
-dark_mode: true # default: true
-font: [OCR A Extended, 8] # [font name, font size], not yet implemented
-default_column_width: 16
-row_height: 32
-to_display: # culumns to display for each Type, do not include name (it's required and auto included)
+dark_mode: true  # default: true
+font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
+default_column_width: 16  # default: 16
+row_height: 32  # default: 32
+to_display:  # culumns to display for each Type, do not include name (it's required and auto included)
     example: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
-workers: 3
-renderers: 1
-hide_unupdated_works: true # default: true
-hide_works_with_no_links: false # default: true
+    Manga: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+workers: 3  # defualt: 3
+renderers: 1  # default: 1
+hide_unupdated_works: true  # default: true
+hide_works_with_no_links: true  # default: true
+hide_updates_with_errors: false  # default: false
 sort_by: score # defulat: score
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
 # prettier-ignore
-sites: #site,                 find,  with,                       then_find, and get,       split at, then get, render?
-    manganato.com:      &001 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
-    www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
-    manhuascan.com:     &003 [div,   class: list-wrap,           a,         href,          '-',      -1,       false]
-    zahard.xyz:         &004 [ul,    class: chapters,            a,         href,          /,        -1,       false]
-    www.royalroad.com:  &005 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]
-    1stkissmanga.io:    &006 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       false]
-    comickiba.com:      &007 [li,    class: wp-manga-chapter,    a,         href,          -|/,      -2,       true]
-    asura.gg:           &008 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
-    mangapuma.com:      &009 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
-    bato.to:            &010 [item,  null,                       title,     null,          ' ',      -1,       false]
-    www.manga-raw.club: &011 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
-    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011] # for formatting reasons
-    chapmanganato.com: *001
-    readmanganato.com: *001
-    nitroscans.com:    *007
-    anshscans.org:     *007
-    flamescans.org:    *008
-    www.mcreader.net:  *011
+sites: #site,                    find,        with,                        then_find, and get,        split at, then get, render?
+    www.royalroad.com:           &001 [table, id: chapters,                None,      data-chapters', ' ',      0,        false]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             # based on absolute chapter count, not chapter name
+    www.webtoons.com:            &002 [ul,    id: _listUl,                 li,        id',            _,        -1,       false]
+    bato.to:                     &003 [item,  None,                        title,     None,           ' ',      -1,       false]
+    mangabuddy.com:              &004 [div,   class: latest-chapters,      a,         href,           '-',      -1,       false]
+    mangapuma.com:               &005 [div,   id: chapter-list-inner,      a,         href,           '-',      -1,       false]
+    www.manga-raw.club:          &006 [ul,    class: chapter-list,         a,         href,           -|/,      -4,       false]
+    zahard.xyz:                  &007 [ul,    class: chapters,             a,         href,           /,        -1,       false]
+    manganato.com:               &008 [ul,    class: row-content-chapter', a,         href,           '-',      -1,       false]
+    flamescans.org:              &009 [span,  class: epcur epcurlast,      None,      None,           ' ',      1,        false]
+    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009]
+    www.mcreader.net:            *006
+    www.mangageko.com:           *006
+    chapmanganato.com:           *008
+    readmanganato.com:           *008
+
 '''
 def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args):
 	'Main function, being "revised"'
@@ -490,6 +564,10 @@ def load_settings(settings_file: str, default_settings: str = default_settings) 
 	except FileNotFoundError as e: print(e)  # except: print error
 	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
 	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
+def async_fix():
+	'fixes runing `run_javascript()` "inside" `asyncio.gather`'
+	from nicegui import globals
+	globals.index_client.content.slots['default'].__enter__()  # not quite sure what this does, but it works
 
 
 if __name__ in {"__main__", "__mp_main__"}:

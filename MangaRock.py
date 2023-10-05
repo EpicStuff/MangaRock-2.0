@@ -20,10 +20,10 @@ class Work():
 		if kwargs['name'] == '': kwargs['name'] = self.__class__.all.__len__  # type: ignore
 		# set self properties to default property values
 		self.__dict__.update(self.prop)
-		# add self to Works.all
-		Work.all.append(self)  # type: ignore
-		# add self to it's class' all dict with name as key
-		self.__class__.all[kwargs['name']] = self  # type: ignore
+		# # add self to Works.all
+		# Work.all.append(self)  # type: ignore
+		# # add self to it's class' all dict with name as key
+		# self.__class__.all[kwargs['name']] = self  # type: ignore
 		# for every kwarg given or from args, format it and update `self.__dict__` with it
 		for key, val in kwargs.items():
 			# if key of kwarg is in properties
@@ -71,14 +71,17 @@ class Work():
 		if type(cls.all) is dict:
 			work = {work.name: work for work in works}
 		cls.all = works
-	def __iter__(self) -> object: return self  # required for to iter over
+	def asdict(self) -> dict:
+		'returns `self` as a dictionary'
+		return {**{'format': self.__class__.__name__}, **{key: val for key, val in self.__dict__.items() if val not in ([], "None", None) if key != 'lChs'}}  # convert attributes to a dictionary
+	def __iter__(self) -> object: return self  # required for to iter over for some reason
 	def __str__(self) -> str:
 		'returns `self` in `str` format'
 		return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'
 	def __repr__(self) -> str:
 		'represent `self` as `self.name` between <>'
 		return f'<{self.name}>'  # type: ignore
-class Manga(Work): all = {}; prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
+class Manga(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
 class Link():
 	def __init__(self, link: str, parent: Work) -> None:
 		self.site = link.split('/')[2]
@@ -153,6 +156,8 @@ class Link():
 				new = self.new
 		self.new = new
 		return new
+	def asdict(self):
+		return self.link
 	def __repr__(self) -> str:
 		'represent `self` as `self.link` between <>'
 		return f'<{self.link}>'  # type: ignore
@@ -163,7 +168,7 @@ class GUI():
 		# setup vars
 		self.settings = settings
 		self.open_tabs = Dict({'Main': Dict({'name': 'Main'})})
-		self.commands = {'/help': 'help', '/debug': 'debug'}
+		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/reload': 'reupdate all works in tab', '/refresh': 'redraw table', '/save': 'save all works in tab', '/close': 'close current tab', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
 		# create tab holder
 		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs:
 			# create main tab
@@ -270,6 +275,7 @@ class GUI():
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
+			from json import load
 			def add_work(format: str | Work, *args, **kwargs) -> Work:
 				'formats `Type` argument and returns the created object'
 				# if the format is a string, turn in into an object
@@ -279,7 +285,6 @@ class GUI():
 				return format(*args, **kwargs)  # type: ignore
 
 			with open(file, 'r', encoding='utf8') as f:
-				from json import load
 				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
 		# extract file name from event
 		file = event.args['data']['name']
@@ -313,11 +318,11 @@ class GUI():
 		rows = self.generate_rowData(works, [], file)
 		# create and switch to tab for file
 		with self.tabs:
-			ui.tab(file)
+			tab.tab = ui.tab(file)
 		self.switch_tab(Dict({'args': file}))
 		# create panel for file
 		with self.panels:
-			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)') as tab.panel:
 				tab.label = ui.label('Reading: ')
 				gridOptions = {
 					'defaultColDef': {
@@ -342,7 +347,7 @@ class GUI():
 					self._input()  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
 		# update all works
-		await self.update_all(works, tab)
+		await self.update_all(tab)
 	async def close_all_other(self, tab: Dict, event: GenericEventArguments):  # TODO: add more comments
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
@@ -448,7 +453,7 @@ class GUI():
 			# 	return
 	async def open_link(self, link: str) -> None:
 		await ui.run_javascript(f"window.open('{link}')", respond=False)
-	async def update_all(self, works: Iterable, tab: Dict) -> None:
+	async def update_all(self, tab: Dict) -> None:
 		'updates all works provided'
 		from requests_html import AsyncHTMLSession
 		async def update_each(work: Work, tab: Dict) -> None:
@@ -471,7 +476,7 @@ class GUI():
 							self.open_tabs.debug.done.add_rows({'name': link.link})
 
 		asession = AsyncHTMLSession()
-		await asyncio.gather(*[update_each(work, tab) for work in works])
+		await asyncio.gather(*[update_each(work, tab) for work in tab.works])
 		print('done updating')
 
 	# def update_row(self, ):
@@ -480,24 +485,48 @@ class GUI():
 	# 		await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
 	# 	else:
 	# 		await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
+	def close_tab(self, tab_name: str) -> None:
+		'closes indicated tab'
+		tab = self.open_tabs[tab_name]
+		tab.panel.delete()
+		tab.tab.delete()
+		# switch to main tab
+		del self.open_tabs[tab_name]
+		self.switch_tab(Dict({'args': 'Main'}))
 	async def handle_input(self, event: GenericEventArguments):
 		# if is a command
 		if event.sender.value[0] == '/':
-			# if is help command
-			if event.sender.value == '/help':
+			# get name of open tab
+			name = self.tabs._props['model-value']
+			command = event.sender.value
+			# if is help command: list all commands
+			if command == '/help':
 				print([f"{key}: {val}" for key, val in self.commands.items()])
-			# if is debug command
-			elif event.sender.value == '/debug':
+			# if is debug command: open debug tab
+			elif command == '/debug':
 				self.debug()
-			# if is reload command
-			elif event.sender.value == '/reload':
-				name = self.tabs._props['model-value']
+			# if is reload command: reupdate all
+			elif command == '/reupdate':
 				# if is not the main tab
 				if name != 'Main':
-					await self.update_all(self.open_tabs.example.works, self.open_tabs[name])
-			elif event.sender.value == '/tmp':
-				name = self.tabs._props['model-value']
-				self.open_tabs[name].grid.call_api_method('setRowData', self.generate_rowData(self.open_tabs[name].works, [], name))
+					await self.update_all(self.open_tabs[name])
+			# if is refresh command: re"draw" grid
+			elif command == '/refresh':
+				self.re_grid(tab_name=name)
+			# if is save, close, or exit command: save all works in tab and
+			elif command in {'/save', '/close', '/exit'}:
+				save_to_file(self.open_tabs[name].works, name + '.json')
+				if command == '/close' and name != 'Main':
+					self.close_tab(name)
+				elif command == '/exit':
+					app.shutdown()
+			# if is quit command: exit without saving
+			elif command == '/quit':
+				app.shutdown()
+			# if is reload: re load file
+			elif command == '/reload':
+				self.close_tab(name)
+				await self._file_opened(Dict({'args': {'data': {'name': name}}}))
 		# clear input
 		event.sender.set_value(None)
 	def debug(self):
@@ -601,6 +630,11 @@ def async_fix():
 	'fixes runing `run_javascript()` "inside" `asyncio.gather`'
 	from nicegui import globals
 	globals.index_client.content.slots['default'].__enter__()  # not quite sure what this does, but it works
+def save_to_file(works: Iterable, file: str) -> None:
+	'Saves all works in `Works.all` to file specified'
+	from json import dump
+	with open(file, 'w', encoding='utf8') as f:
+		dump(works, f, indent='\t', default=lambda work: work.asdict())
 
 
 if __name__ in {"__main__", "__mp_main__"}:

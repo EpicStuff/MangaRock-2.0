@@ -7,42 +7,50 @@
 			"https://mangabuddy.com/i-am-the-fated-villain",
 			"https://1stkissmanga.io/manga/everlasting-god-of-sword"
 		],
-		"chapter": 10,
+		"chapter": 10.0,
 		"score": "Great",
-		"tags": ["strong lead"]
+		"tags": [
+			"strong lead"
+		]
 	},
 	{
 		"format": "Manga",
 		"name": "Everlasting God of Sword",
-		"links": ["https://www.mcreader.net/manga/everlasting-god-of-sword"],
-		"chapter": 206,
+		"links": [
+			"https://www.mcreader.net/manga/everlasting-god-of-sword"
+		],
+		"chapter": 206.0,
 		"score": "Great",
-		"tags": ["strong lead"]
+		"tags": [
+			"strong lead"
+		]
 	},
 	{
 		"format": "Manga",
 		"name": "name: Test 1",
-		"author": "test: author",
-		"links": ["https://link-1"],
-		"chapter": 1
+		"links": [
+			"https://link-1"
+		],
+		"chapter": 1.0,
+		"author": "test: author"
 	},
 	{
 		"format": "Manga",
 		"name": "name: Test 2",
+		"chapter": 2.0,
 		"series": "test: series",
-		"author": "test: author",
-		"chapter": 2
+		"author": "test: author"
 	},
 	{
 		"format": "Manga",
 		"name": "name: Test 3",
-		"series": "test: series",
-		"author": "test: author",
 		"links": [
 			"https://example.com/1",
 			"https://example.com/2",
 			"https://example.com/3"
 		],
-		"chapter": 3
+		"chapter": 3.0,
+		"series": "test: series",
+		"author": "test: author"
 	}
 ]

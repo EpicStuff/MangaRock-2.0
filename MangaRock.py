@@ -347,6 +347,7 @@ class GUI():
 					self._input()  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
 		# update all works
+		await asyncio.sleep(1)
 		await self.update_all(tab)
 	async def close_all_other(self, tab: Dict, event: GenericEventArguments):  # TODO: add more comments
 		'is called whenever a row is opened'
@@ -638,10 +639,5 @@ def save_to_file(works: Iterable, file: str) -> None:
 
 
 if __name__ in {"__main__", "__mp_main__"}:
-	# import tracemalloc
-	# from multiprocessing import freeze_support
-	# tracemalloc.start()
-	# freeze_support()
-
 	import sys
 	main(*sys.argv)

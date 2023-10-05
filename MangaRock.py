@@ -328,6 +328,7 @@ class GUI():
 					'defaultColDef': {
 						'resizable': True,
 						'suppressMenu': True,
+						'suppressMovable': self.settings['disable_col_dragging'],
 						'cellRendererParams': {'suppressCount': True, },
 					},
 					'autoGroupColumnDef': {
@@ -564,6 +565,7 @@ dark_mode: true  # default: true
 font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
 default_column_width: 16  # default: 16
 row_height: 32  # default: 32
+disable_col_dragging: true  # default: true
 to_display:  # culumns to display for each Type, do not include name (it's required and auto included)
     example: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
     Manga: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}

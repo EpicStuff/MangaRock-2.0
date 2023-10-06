@@ -1,4 +1,3 @@
-bs4
-json5
-pyperclip
+nicegui
+ruamel.yaml
 requests-html

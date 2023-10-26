@@ -11,42 +11,58 @@
 	},
 	{
 		"format": "Text",
+		"name": "The Perfect Run",
+		"links": ["https://www.royalroad.com/fiction/36735"],
+		"chapter": 130.0,
+		"author": "Maxime J. Durand",
+		"score": "Great",
+		"tags": ["Complete", "Read", "Strong Lead"]
+	},
+	{
+		"format": "Text",
+		"name": "Mother of Learning",
+		"links": ["https://www.royalroad.com/fiction/21220"],
+		"chapter": 109.0,
+		"author": "nobody103",
+		"score": "Good+"
+	},
+	{
+		"format": "Text",
 		"name": "The Elcy Protocol",
 		"links": ["https://www.royalroad.com/fiction/15449"],
-		"chapter": 63.0,
+		"chapter": 0,
 		"author": "Lise Eclaire",
 		"score": "Great",
 		"series": "Quod Olim Erat",
-		"tags": ["Complete", "Read"]
+		"tags": ["Complete"]
 	},
 	{
 		"format": "Text",
 		"name": "The Scuu Paradox",
 		"links": ["https://www.royalroad.com/fiction/23614"],
-		"chapter": 63.0,
+		"chapter": 0,
 		"author": "Lise Eclaire",
 		"score": "Great",
 		"series": "Quod Olim Erat",
-		"tags": ["Complete", "Read"]
+		"tags": ["Complete"]
 	},
 	{
 		"format": "Text",
 		"name": "The Cassandrian Theory",
 		"links": ["https://www.royalroad.com/fiction/39027"],
-		"chapter": 55,
+		"chapter": 0,
 		"author": "Lise Eclaire",
 		"series": "Quod Olim Erat",
 		"score": "Great",
-		"tags": ["Read", "Complete"]
+		"tags": ["Complete"]
 	},
 	{
 		"format": "Text",
 		"name": "Fractal Contact",
 		"links": ["https://www.royalroad.com/fiction/75121"],
-		"chapter": 3,
+		"chapter": 0,
 		"author": "Lise Eclaire",
 		"series": "Quod Olim Erat",
-		"score": "Great",
-		"tags": ["Reading"]
+		"score": "Great"
 	}
 ]

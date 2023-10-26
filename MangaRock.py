@@ -589,7 +589,9 @@ sites: #site,                    find,        with,                        then_
     zahard.xyz:                  &007 [ul,    class: chapters,             a,         href,           /,        -1,       false]
     manganato.com:               &008 [ul,    class: row-content-chapter,  a,         href,           '-',      -1,       false]
     flamescans.org:              &009 [span,  class: epcur epcurlast,      None,      None,           ' ',      1,        false]
-    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009]
+    manhuaplus.com:              &010 [ul,      class: version-chap,        a,                 href,           '-|/',    -2,       false]
+    mangadex.org:                &011 [div,     class: text-center,         None,              None,           '-',      -1,       true]
+    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]
     www.mcreader.net:            *006
     www.mangageko.com:           *006
     chapmanganato.com:           *008

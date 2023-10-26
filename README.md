@@ -3,4 +3,9 @@ MangaRock 2.0 is a program inspired by the original MangaRock that not only keep
 
 readme.md is being(/will be) worked on
 
+# Pictures
+![](/docs/1.png)
+![](/docs/2.png)
+![](/docs/3.png)
+
 license: pls don't just copy and stuff

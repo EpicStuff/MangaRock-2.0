@@ -1,5 +1,4 @@
-# Version: 3.3.1
-# okay, heres the plan, make links its own separate object and have the links update individualy. when the updates, it will then update its parent's display
+# Version: 3.4.0
 import asyncio
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments

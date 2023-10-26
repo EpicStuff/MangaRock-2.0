@@ -114,6 +114,7 @@ class Link():
 			link = await asession.get(self.link)  # connecting to the site
 			assert link.ok  # make sure connection was successful
 		except Exception as e:  # connection error
+			print('error:', f"{self.link}, {e}")
 			self.latest = e
 			return self.re(-999.2)
 		# render site if necessary
@@ -124,7 +125,7 @@ class Link():
 					await link.html.arender(retries=2, wait=1, sleep=2, timeout=20, reload=True)
 				if __debug__: print('done rendering', self.link, '-', self.site)
 		except Exception as e:
-			print('failed to render: ', self.link, ' - ', self.site, ', ', e, sep='')  # render error
+			print('failed to render: ', self.link, ', ', e, sep='')  # render error
 			self.latest = e
 			return self.re(-999.3)
 
@@ -137,12 +138,14 @@ class Link():
 			else:
 				link = link.find(sites[self.site][0], sites[self.site][1]).find(sites[self.site][2]).get(sites[self.site][3])  # else: get specified attribute of first specified tag under the first tag with specified attribute
 		except AttributeError as e:
+			print('error:', f"{self.link}, {e}")
 			self.latest = e  # parsing error
 			return self.re(-999.4)
 
 		try:
 			self.latest = float(re.split(sites[self.site][4], link)[sites[self.site][5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 		except Exception as e:
+			print('error:', f"{self.link}, {e}")
 			self.latest = e  # whatever was extracted was not a number
 			return self.re(-999.5)
 

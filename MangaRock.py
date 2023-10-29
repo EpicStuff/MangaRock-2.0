@@ -298,11 +298,7 @@ class GUI():
 		# get columns to display
 		cols = [{'field': 'id', 'aggFunc': 'first', 'hide': True}]
 		try:
-			for key, val in self.settings['to_display'][file].items():  # TODO: maybe turn into list comprehension
-				if val[1] == 'group':
-					cols.append({'field': key, 'rowGroup': True, 'hide': True})
-				else:
-					cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']})
+			cols = cols + [{'field': key, 'rowGroup': True, 'hide': True} if val[1] == 'group' else {'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']} for key, val in self.settings['to_display'][file].items()]
 		except KeyError as e:
 			raise Exception('Columns for', e, 'has not been specified in settings.yaml')  # TODO: setup default columns instead of crash
 		cols[-1]['resizable'] = False
@@ -620,8 +616,8 @@ def load_settings(settings_file: str, default_settings: str = default_settings) 
 		while '  ' in file[start][14:]:
 			file[start] = file[start][:14] + file[start][14:].replace('  ', ' ')  # remove all extra spaces from 'sites:' line
 		for line_num, line in enumerate(file[start:], start):  # remove all the other extra spaces, TODO: replace enumerate with range
-			while '   ' in file[line_num]:
-				file[line_num] = file[line_num].replace('   ', '  ')
+			while '   ' in file[line_num][4:]:
+				file[line_num] = file[line_num][:4] + file[line_num][4:].replace('   ', '  ')
 		while len(done) != len(file[start:]):  # while not all lines have been formatted
 			if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
 			for line_num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
@@ -631,9 +627,6 @@ def load_settings(settings_file: str, default_settings: str = default_settings) 
 				elif line_num in adding and line[col + 1] != ' ': file[line_num] = line[0:col] + ' ' + line[col:]  # if line is in adding and next char is not ' ' then add space into line at i
 				elif line[col] == ',' or (line[col] == ':' and line[col + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(line_num)  # if elm endpoint is reached, add line into adding
 			col += 1  # increase column counter
-
-			if col == 118:
-				pass
 		with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
 
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml

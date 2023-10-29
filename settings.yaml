@@ -12,24 +12,24 @@ renderers: 3  # default: 1
 hide_unupdated_works: true  # default: true
 hide_works_with_no_links: true  # default: true
 hide_updates_with_errors: false  # default: false
-sort_by: score # defulat: score, score is currently only working option
+sort_by: score  # defulat: score, score is currently only working option
 # prettier-ignore
-scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
+scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
 # prettier-ignore
-sites: #site,                 find,    with,                       then_find, and get,       split at, then get, render?
-    www.royalroad.com:  &001 [table, id: chapters,               null,        data-chapters, ' ',      0,        false]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   # based on absolute chapter count, not chapter name
-    www.webtoons.com:   &002 [ul,    id: _listUl,                li,          id,            _,        -1,       false]
-    bato.to:            &003 [item,  null,                       title,       null,          ' ',      -1,       false]
-    mangabuddy.com:     &004 [div,   class: latest-chapters,     a,           href,          '-',      -1,       false]
-    mangapuma.com:      &005 [div,   id: chapter-list-inner,     a,           href,          '-',      -1,       false]
-    www.manga-raw.club: &006 [ul,    class: chapter-list,        a,           href,          -|/,      -4,       false]
-    zahard.xyz:         &007 [ul,    class: chapters,            a,           href,          /,        -1,       false]
-    manganato.com:      &008 [ul,    class: row-content-chapter, a,           href,          '-',      -1,       false]
-    flamescans.org:     &009 [span,  class: epcur epcurlast,     null,        null,          ' ',      1,        false]
-    manhuaplus.com:     &010 [ul,    class: version-chap,        a,           href,          -|/,      -2,       false]
-    mangadex.org:       &011 [div,   class: text-center,         null,        null,          '-',      -1,       true]
-    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]  # for aligning reasons
-    www.mcreader.net:   *006
-    www.mangageko.com:  *006
-    chapmanganato.com:  *008
-    readmanganato.com:  *008
+sites:  # site,       find,        with,                       then_find, and get,       split at, then get, render?
+  www.royalroad.com:  &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
+  www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
+  bato.to:            &003 [item,  null,                       title,     null,          ' ',      -1,       false]
+  mangabuddy.com:     &004 [div,   class: latest-chapters,     a,         href,          '-',      -1,       false]
+  mangapuma.com:      &005 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
+  www.manga-raw.club: &006 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+  zahard.xyz:         &007 [ul,    class: chapters,            a,         href,          /,        -1,       false]
+  manganato.com:      &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
+  flamescans.org:     &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+  manhuaplus.com:     &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
+  mangadex.org:       &011 [div,   class: text-center,         null,      null,          '-',      -1,       true]
+  null:               [*001,       *002,                       *003,      *004,          *005,     *006,     *007,                                      *008,             *009, *010, *011]  # for aligning reasons
+  www.mcreader.net:   *006
+  www.mangageko.com:  *006
+  chapmanganato.com:  *008
+  readmanganato.com:  *008

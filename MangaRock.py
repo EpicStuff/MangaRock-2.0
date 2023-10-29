@@ -578,12 +578,12 @@ renderers: 1  # default: 1
 hide_unupdated_works: true  # default: true
 hide_works_with_no_links: true  # default: true
 hide_updates_with_errors: false  # default: false
-sort_by: score # defulat: score, score is currently only working option
+sort_by: score  # defulat: score, score is currently only working option
 # prettier-ignore
-scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
+scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
 # prettier-ignore
-sites: #site,                 find,    with,                       then_find, and get,       split at, then get, render?
-    www.royalroad.com:  &001 [table,   id: chapters,               null,      data-chapters, ' ',      0,       false]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                # based on absolute chapter count, not chapter name
+sites:  # site,                 find,    with,                       then_find, and get,       split at, then get, render?
+    www.royalroad.com:  &001 [table,   id: chapters,               null,      data-chapters, ' ',      0,       false]  # based on absolute chapter count, not chapter name
     www.webtoons.com:   &002 [ul,      id: _listUl,                li,        id,            _,        -1,      false]
     bato.to:            &003 [item,    null,                       title,     null,          ' ',      -1,      false]
     mangabuddy.com:     &004 [div,     class: latest-chapters,     a,         href,          '-',      -1,      false]
@@ -616,16 +616,24 @@ def load_settings(settings_file: str, default_settings: str = default_settings) 
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
 		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
-		i = 0; adding = set(); done = set()
+		col = 0; adding = set(); done = set()
+		while '  ' in file[start][14:]:
+			file[start] = file[start][:14] + file[start][14:].replace('  ', ' ')  # remove all extra spaces from 'sites:' line
+		for line_num, line in enumerate(file[start:], start):  # remove all the other extra spaces, TODO: replace enumerate with range
+			while '   ' in file[line_num]:
+				file[line_num] = file[line_num].replace('   ', '  ')
 		while len(done) != len(file[start:]):  # while not all lines have been formatted
 			if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
-			for num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
-				if line[0:9] == '    null:': done.add(num)
-				if num in done: continue  # skip completed lines
-				if line[i] == '\n': done.add(num)  # add line's index to done when it reaches the end
-				elif num in adding and line[i + 1] != ' ': file[num] = line[0:i] + ' ' + line[i:]  # if line is in adding and next char is not ' ' then add space into line at i
-				elif line[i] == ',' or (line[i] == ':' and line[i + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(num)  # if elm endpoint is reached, add line into adding
-			i += 1  # increase column counter
+			for line_num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
+				if line[0:9] == '    null:': done.add(line_num)
+				if line_num in done: continue  # skip completed lines
+				if line[col] == '\n': done.add(line_num)  # add line's index to done when it reaches the end
+				elif line_num in adding and line[col + 1] != ' ': file[line_num] = line[0:col] + ' ' + line[col:]  # if line is in adding and next char is not ' ' then add space into line at i
+				elif line[col] == ',' or (line[col] == ':' and line[col + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(line_num)  # if elm endpoint is reached, add line into adding
+			col += 1  # increase column counter
+
+			if col == 118:
+				pass
 		with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
 
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml

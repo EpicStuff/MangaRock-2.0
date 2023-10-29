@@ -1,4 +1,4 @@
-# Version: 3.4.0
+# Version: 3.4.1
 import asyncio
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
@@ -192,7 +192,7 @@ class GUI():
 					'rowData': files,
 					'rowHeight': self.settings['row_height'],
 				}
-				self.open_tabs.Main.grid = ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)').on('cellDoubleClicked', self._file_opened)
+				self.open_tabs.Main.grid = ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)').on('cellDoubleClicked', self._file_opened)
 				with ui.row().classes('w-full'):
 					self._input()
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
@@ -344,7 +344,7 @@ class GUI():
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
 				}
-				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark').style('height: calc(100vh - 164px)'))
+				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)'))
 				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
 				tab.grid.on('cellDoubleClicked', wrap(self.work_selected, tab))
 				with ui.row().classes('w-full').style('gap: 0'):
@@ -610,7 +610,7 @@ def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args
 	files = [{'name': file.split('.json')[0]} for file in os.listdir() if file.split('.')[-1] == 'json']
 	gui = GUI(settings, files)
 	# start gui
-	ui.run(dark=True, title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
+	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
 def load_settings(settings_file: str, default_settings: str = default_settings) -> dict:
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file

@@ -307,7 +307,7 @@ class GUI():
 			raise Exception('Columns for', e, 'has not been specified in settings.yaml')  # TODO: setup default columns instead of crash
 		cols[-1]['resizable'] = False
 		# load works from file and refrence them in open_tabs
-		works = load_file(file + '.json')
+		works = load_file(self.settings['json_files_dir'] + file + '.json')
 		tab = self.open_tabs[file] = Dict({'name': file, 'works': works, 'links': {}})
 		tab.reading = None
 		tab.open = set()
@@ -520,7 +520,7 @@ class GUI():
 				self.re_grid(tab_name=name)
 			# if is save, close, or exit command: save all works in tab and
 			elif command in {'/save', '/close', '/exit'}:
-				save_to_file(self.open_tabs[name].works, name + '.json')
+				save_to_file(self.open_tabs[name].works, self.settings['json_files_dir'] + name + '.json')
 				if command == '/close' and name != 'Main':
 					self.close_tab(name)
 				elif command == '/exit':
@@ -565,6 +565,7 @@ class GUI():
 
 default_settings = '''
 dark_mode: true  # default: true
+json_files_dir: ./  # default: ./
 font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
 default_column_width: 16  # default: 16
 row_height: 32  # default: 32
@@ -577,7 +578,7 @@ renderers: 1  # default: 1
 hide_unupdated_works: true  # default: true
 hide_works_with_no_links: true  # default: true
 hide_updates_with_errors: false  # default: false
-sort_by: score # defulat: score
+sort_by: score # defulat: score, score is currently only working option
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3} # numerical value of score used when sorting by score
 # prettier-ignore
@@ -607,7 +608,7 @@ def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args
 	if __debug__: print(f'working directory: {os.getcwd()}')
 	# setup gui
 	settings = load_settings(settings_file, default_settings)
-	files = [{'name': file.split('.json')[0]} for file in os.listdir() if file.split('.')[-1] == 'json']
+	files = [{'name': file.split('.json')[0]} for file in os.listdir(settings['json_files_dir']) if file.split('.')[-1] == 'json']
 	gui = GUI(settings, files)
 	# start gui
 	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False)

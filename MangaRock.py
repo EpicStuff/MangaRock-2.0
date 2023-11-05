@@ -517,6 +517,7 @@ class GUI():
 			# if is save, close, or exit command: save all works in tab and
 			elif command in {'/save', '/close', '/exit'}:
 				save_to_file(self.open_tabs[name].works, self.settings['json_files_dir'] + name + '.json')
+				ui.notify('Saved ' + name)
 				if command == '/close' and name != 'Main':
 					self.close_tab(name)
 				elif command == '/exit':
@@ -568,7 +569,6 @@ row_height: 32  # default: 32
 disable_col_dragging: true  # default: true
 to_display:  # culumns to display for each Type, do not include name (it's required and auto included)
     example: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
-    Manga: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
 workers: 3  # defualt: 3
 renderers: 1  # default: 1
 hide_unupdated_works: true  # default: true

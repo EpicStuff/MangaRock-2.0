@@ -82,6 +82,7 @@ class Work():
 		return f'<{self.name}>'  # type: ignore
 class Manga(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
 class Text(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
+class Series(Work): prop = {'name': None, 'links': [], 'volume': 0, 'author': None, 'score': None, 'tags': []}
 class Link():
 	def __init__(self, link: str, parent: Work) -> None:
 		self.site = link.split('/')[2]
@@ -240,12 +241,15 @@ class GUI():
 			row['name'] += '‏'
 			# shuffle "row"s "up"
 			for col in range(len(cols)):  # for each col
-				while row[cols[col]] is None:  # while the col is empty
-					# shuffle cols "up"
-					for mod in range(col, len(cols) - 1):
-						row[cols[mod]] = row[cols[mod + 1]]
-					# set last col to empty
-					row[cols[-1]] = ' '
+				try:
+					while row[cols[col]] is None:  # while the col is empty
+						# shuffle cols "up"
+						for mod in range(col, len(cols) - 1):
+							row[cols[mod]] = row[cols[mod + 1]]
+						# set last col to empty
+						row[cols[-1]] = ' '
+				except Exception as e:  # skip row if error, i think
+					print('format_rowData error:', e)
 			return row
 		# for each work in works
 		for num_work, work in enumerate(works):

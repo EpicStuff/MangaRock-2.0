@@ -5,9 +5,10 @@ default_column_width: 32  # default: 16
 row_height: 32  # default: 32
 disable_col_dragging: true  # default: true
 to_display:  # culumns to display for each Type, do not include name (it's required and auto included)
-    example: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
-    Manga: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+    Manga: &001 {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
     Text: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+    example: *001
+    .test: *001
 workers: 8  # defualt: 3
 renderers: 3  # default: 1
 hide_unupdated_works: true  # default: true
@@ -34,3 +35,4 @@ sites:  # site,         find,        with,                       then_find, and 
     www.mangageko.com:  *006
     chapmanganato.com:  *008
     readmanganato.com:  *008
+    reaper-scans.com:   *009

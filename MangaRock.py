@@ -5,6 +5,8 @@ from nicegui.events import GenericEventArguments
 from typing import Any, Iterable
 from functools import partial as wrap
 from stuff import Dict
+from rich.console import Console
+console = Console()
 
 
 class Work():
@@ -98,7 +100,14 @@ class Link():
 			-999.4 = parsing error
 			-999.5 = whatever was extracted was not a number'''
 		import re, bs4
-		# if "special" tags are in link, skip
+		# if site is supported
+		if self.site not in sites:
+			self.latest = Exception('site not supported')  # site not supported
+			return self.re(-999.1)
+		# variables
+		link = self.link
+		sites = sites[self.site]
+		# if "special" tags are in link, skip, #TODO: specify these tags in settings
 		if 'tags' in self.parent.prop:
 			tags = self.parent.tags
 			if ('do not check for updates' in tags) or ('Complete' in tags and 'Read' in tags) or ('Oneshot' in tags and 'Read' in tags) or ('Two Shot' in tags and 'Read' in tags):
@@ -106,47 +115,64 @@ class Link():
 				return self.re(0)
 		# tmp: special stuff for bato.to
 		if self.site == 'bato.to': link = self.link.replace('title/', 'rss/series/') + '.xml'
-		# if site is supported
-		if self.site not in sites:
-			self.latest = Exception('site not supported')  # site not supported
-			return self.re(-999.1)
 		# connecting to site
 		try:
-			link = await asession.get(self.link)  # connecting to the site
+			link = await asession.get(link)  # connecting to the site
 			assert link.ok  # make sure connection was successful
 		except Exception as e:  # connection error
-			print('error:', f"{self.link}, {e}")
+			print('error:', self.link)
+			console.print_exception(show_locals=True, suppress=('link', 'sites'))
 			self.latest = e
 			return self.re(-999.2)
-		# render site if necessary
-		try:
-			if sites[self.site][6]:  # if needs to be rendered
-				if __debug__: print('rendering', self.link, '-', self.site)
+		# if site needs to be rendered, render
+		if sites[6]:
+			try:
+				print('rendering', self.link, '-', self.site)
 				with renderers:
 					await link.html.arender(retries=2, wait=1, sleep=2, timeout=20, reload=True)
-				if __debug__: print('done rendering', self.link, '-', self.site)
-		except Exception as e:
-			print('failed to render: ', self.link, ', ', e, sep='')  # render error
-			self.latest = e
-			return self.re(-999.3)
+				print('done rendering', self.link, '-', self.site)
+			except Exception as e:
+				print('failed to render:', self.link)  # render error
+				console.print_exception(show_locals=True, suppress=('link', 'sites'))
+				self.latest = e
+				return self.re(-999.3)
 
 		try:
-			link = bs4.BeautifulSoup(link.html.html, 'html.parser')  # link = bs4 object with link html
-			if (sites[self.site][2] is None) and (sites[self.site][3] is None):
-				link = link.find(sites[self.site][0], sites[self.site][1]).contents[0]  # if site does not require second find and the contents are desired: get contents of first tag with specified requirements
-			elif sites[self.site][2] is None:
-				link = link.find(sites[self.site][0], sites[self.site][1]).get(sites[self.site][3])  # if site does not require second find and tag attribute is desired: get specified attribute of first tag with specified attribute
+			# convert link into bs4 object
+			link = bs4.BeautifulSoup(link.html.html, 'html.parser')
+			# sites: find, with
+			link = link.find(sites[0], sites[1])
+			# if sites: "then find" and "and get" = null
+			if sites[2] == sites[3] == None:
+				# get contents
+				link = link.contents[0]
+			# if sites: "then find" = null
+			elif sites[2] is None:
+				# get sites: "and get"
+				link = link.get(sites[3])
+			# sites: "then find" != null
 			else:
-				link = link.find(sites[self.site][0], sites[self.site][1]).find(sites[self.site][2]).get(sites[self.site][3])  # else: get specified attribute of first specified tag under the first tag with specified attribute
+				# find sites: "then find"
+				link = link.find(sites[2])
+				# if sites: "and get" = null
+				if sites[3] is None:
+					# get contents
+					link = link.get_text()
+				# else
+				else:
+					# get sites: "and get"
+					link = link.get(sites[3])
 		except AttributeError as e:
-			print('error:', f"{self.link}, {e}")
+			print('error:', self.link)
+			console.print_exception(show_locals=True, suppress=('link', 'sites'))
 			self.latest = e  # parsing error
 			return self.re(-999.4)
 
 		try:
-			self.latest = float(re.split(sites[self.site][4], link)[sites[self.site][5]])  # else link parsing went fine: extract latest chapter from link using lookup table
+			self.latest = float(re.split(sites[4], link)[sites[5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 		except Exception as e:
-			print('error:', f"{self.link}, {e}")
+			print('error:', self.link)
+			console.print_exception(show_locals=True, suppress=('link', 'sites'))
 			self.latest = e  # whatever was extracted was not a number
 			return self.re(-999.5)
 

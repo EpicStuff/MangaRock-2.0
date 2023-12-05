@@ -1,13 +1,12 @@
 # Version: 3.4.1
-import asyncio
+import asyncio, os
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
 from typing import Any, Iterable
 from functools import partial as wrap
 from stuff import Dict
-from rich.console import Console
-console = Console()
-
+from rich.console import Console; console = Console()
+from rich.traceback import install; install(width=os.get_terminal_size().columns)
 
 class Work():
 	''' Base Type class to be inherited by subclasses to give custom properties\n
@@ -91,7 +90,7 @@ class Link():
 		self.link = link
 		self.parent = parent
 		self.new = self.latest = ''
-	async def update(self, renderers, sites: dict, asession) -> float | Exception:
+	async def update(self, renderers: asyncio.Semaphore, sites: dict, async_session) -> float | Exception:
 		'''Finds latest chapter from `self.link` then sets result or an error code to `self.latest`
 		# Error Codes:
 			-999.1 = site not supported
@@ -117,29 +116,30 @@ class Link():
 		if self.site == 'bato.to': link = self.link.replace('title/', 'rss/series/') + '.xml'
 		# connecting to site
 		try:
-			link = await asession.get(link)  # connecting to the site
-			assert link.ok  # make sure connection was successful
+			link = await async_session.get(link, follow_redirects=True)  # connecting to the site
+			assert link.status_code == 200  # make sure connection was successful
 		except Exception as e:  # connection error
-			print('error:', self.link)
-			console.print_exception(show_locals=True, suppress=('link', 'sites'))
+			print('connection error:', self.link)
+			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e
 			return self.re(-999.2)
 		# if site needs to be rendered, render
 		if sites[6]:
 			try:
 				print('rendering', self.link, '-', self.site)
-				with renderers:
-					await link.html.arender(retries=2, wait=1, sleep=2, timeout=20, reload=True)
+				async with renderers:  # limit the number of works rendering at a time
+					# render link
+					async with link.async_render(reload=True, wait_until='networkidle'): pass
 				print('done rendering', self.link, '-', self.site)
 			except Exception as e:
 				print('failed to render:', self.link)  # render error
-				console.print_exception(show_locals=True, suppress=('link', 'sites'))
+				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 				self.latest = e
 				return self.re(-999.3)
 
 		try:
 			# convert link into bs4 object
-			link = bs4.BeautifulSoup(link.html.html, 'html.parser')
+			link = bs4.BeautifulSoup(link.content, 'lxml')
 			# sites: find, with
 			link = link.find(sites[0], sites[1])
 			# if sites: "then find" and "and get" = null
@@ -163,16 +163,14 @@ class Link():
 					# get sites: "and get"
 					link = link.get(sites[3])
 		except AttributeError as e:
-			print('error:', self.link)
-			console.print_exception(show_locals=True, suppress=('link', 'sites'))
+			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # parsing error
 			return self.re(-999.4)
 
 		try:
 			self.latest = float(re.split(sites[4], link)[sites[5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 		except Exception as e:
-			print('error:', self.link)
-			console.print_exception(show_locals=True, suppress=('link', 'sites'))
+			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # whatever was extracted was not a number
 			return self.re(-999.5)
 
@@ -486,8 +484,8 @@ class GUI():
 		await ui.run_javascript(f"window.open('{link}')", respond=False)
 	async def update_all(self, tab: Dict) -> None:
 		'updates all works provided'
-		from requests_html import AsyncHTMLSession
-		async def update_each(work: Work, tab: Dict) -> None:
+		from requests_html2 import AsyncHTMLSession
+		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
 			async_fix()
 			if 'links' in work.prop:
 				for link in work.links:  # type: ignore
@@ -495,7 +493,7 @@ class GUI():
 						# if debug tab open
 						if 'debug' in self.open_tabs:
 							self.open_tabs.debug.updating.add_rows({'name': link.link})
-						new = await link.update(self.renderers, self.settings['sites'], asession)
+						new = await link.update(self.renderers, self.settings['sites'], async_session)
 						# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
 						if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
 							await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
@@ -506,8 +504,9 @@ class GUI():
 							self.open_tabs.debug.updating.remove_rows({'name': link.link})
 							self.open_tabs.debug.done.add_rows({'name': link.link})
 
-		asession = AsyncHTMLSession()
-		await asyncio.gather(*[update_each(work, tab) for work in tab.works])
+		# async_session = AsyncHTMLSession()
+		async with AsyncHTMLSession() as async_session:
+			await asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works])
 		print('done updating')
 
 	# def update_row(self, ):
@@ -607,24 +606,27 @@ hide_updates_with_errors: false  # default: false
 sort_by: score  # defulat: score, score is currently only working option
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
+sites_ignore: []
 # prettier-ignore
-sites:  # site,                 find,    with,                       then_find, and get,       split at, then get, render?
-    www.royalroad.com:  &001 [table,   id: chapters,               null,      data-chapters, ' ',      0,       false]  # based on absolute chapter count, not chapter name
-    www.webtoons.com:   &002 [ul,      id: _listUl,                li,        id,            _,        -1,      false]
-    bato.to:            &003 [item,    null,                       title,     null,          ' ',      -1,      false]
-    mangabuddy.com:     &004 [div,     class: latest-chapters,     a,         href,          '-',      -1,      false]
-    mangapuma.com:      &005 [div,     id: chapter-list-inner,     a,         href,          '-',      -1,      false]
-    www.manga-raw.club: &006 [ul,      class: chapter-list,        a,         href,          -|/,      -4,      false]
-    zahard.xyz:         &007 [ul,      class: chapters,            a,         href,          /,        -1,      false]
-    manganato.com:      &008 [ul,      class: row-content-chapter, a,         href,          '-',      -1,      false]
-    flamescans.org:     &009 [span,    class: epcur epcurlast,     null,      null,          ' ',      1,       false]
-    manhuaplus.com:     &010 [ul,      class: version-chap,        a,         href,          -|/,      -2,      false]
-    mangadex.org:       &011 [div,     class: text-center,         null,      null,          '-',      -1,      true]
+sites:  # site,         find,        with,                       then_find, and get,       split at, then get, render?
+    www.royalroad.com:  &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
+    www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
+    bato.to:            &003 [item,  null,                       title,     null,          ' ',      -1,       false]
+    mangabuddy.com:     &004 [div,   class: latest-chapters,     a,         href,          '-',      -1,       false]
+    mangapuma.com:      &005 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
+    www.manga-raw.club: &006 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+    zahard.xyz:         &007 [ul,    class: chapters,            a,         href,          /,        -1,       false]
+    manganato.com:      &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
+    reaper-scans.com:   &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+    manhuaplus.com:     &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
+    mangadex.org:       &011 [div,   class: text-center,         null,      null,          '-',      -1,       true]
     null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]  # for aligning reasons
     www.mcreader.net:   *006
     www.mangageko.com:  *006
     chapmanganato.com:  *008
     readmanganato.com:  *008
+    # flamescans.org:   *009
+
 '''
 def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args):
 	'Main function, being "revised"'

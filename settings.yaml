@@ -5,10 +5,10 @@ default_column_width: 32  # default: 16
 row_height: 32  # default: 32
 disable_col_dragging: true  # default: true
 to_display:  # culumns to display for each Type, do not include name (it's required and auto included)
-    Manga: &001 {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+    Manga: &1 {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
     Text: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
-    example: *001
-    .test: *001
+    example: *1
+    .test: *1
 workers: 8  # defualt: 3
 renderers: 3  # default: 1
 hide_unupdated_works: true  # default: true
@@ -17,6 +17,7 @@ hide_updates_with_errors: false  # default: false
 sort_by: score  # defulat: score, score is currently only working option
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
+sites_ignore: []
 # prettier-ignore
 sites:  # site,         find,        with,                       then_find, and get,       split at, then get, render?
     www.royalroad.com:  &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
@@ -27,12 +28,13 @@ sites:  # site,         find,        with,                       then_find, and 
     www.manga-raw.club: &006 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
     zahard.xyz:         &007 [ul,    class: chapters,            a,         href,          /,        -1,       false]
     manganato.com:      &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
-    flamescans.org:     &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+    reaper-scans.com:   &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
     manhuaplus.com:     &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
-    mangadex.org:       &011 [div,   class: text-center,         null,      null,          '-',      -1,       true]
+    mangadex.org:       &011 [div,   class: text-center,         null,      null,          -|\.,     -1,       true]
     null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]  # for aligning reasons
     www.mcreader.net:   *006
     www.mangageko.com:  *006
     chapmanganato.com:  *008
     readmanganato.com:  *008
-    reaper-scans.com:   *009
+    # flamescans.org:   *009
+

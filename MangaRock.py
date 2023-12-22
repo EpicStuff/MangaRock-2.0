@@ -1,4 +1,4 @@
-# Version: 3.4.1
+# Version: 3.4.2
 import asyncio, os
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
@@ -136,37 +136,49 @@ class Link():
 				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 				self.latest = e
 				return self.re(-999.3)
-
+		# process link
 		try:
 			# convert link into bs4 object
 			link = bs4.BeautifulSoup(link.content, 'lxml')
 			# sites: find, with
-			link = link.find(sites[0], sites[1])
+			tmp = link.find(sites[0], sites[1])
+			assert tmp is not None
+			link = tmp
 			# if sites: "then find" and "and get" = null
 			if sites[2] == sites[3] == None:
 				# get contents
-				link = link.contents[0]
+				tmp = link.contents[0]
+				assert tmp is not None
+				link = tmp
 			# if sites: "then find" = null
 			elif sites[2] is None:
 				# get sites: "and get"
-				link = link.get(sites[3])
+				tmp = link.get(sites[3])
+				assert tmp is not None
+				link = tmp
 			# sites: "then find" != null
 			else:
 				# find sites: "then find"
-				link = link.find(sites[2])
+				tmp = link.find(sites[2])
+				assert tmp is not None
+				link = tmp
 				# if sites: "and get" = null
 				if sites[3] is None:
 					# get contents
-					link = link.get_text()
+					tmp = link.get_text()
+					assert tmp is not None
+					link = tmp
 				# else
 				else:
 					# get sites: "and get"
-					link = link.get(sites[3])
-		except AttributeError as e:
+					tmp = link.get(sites[3])
+					assert tmp is not None
+					link = tmp
+		except (AttributeError, AssertionError) as e:
 			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # parsing error
 			return self.re(-999.4)
-
+		# convert remaining html to float
 		try:
 			self.latest = float(re.split(sites[4], link)[sites[5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 		except Exception as e:

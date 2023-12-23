@@ -208,7 +208,7 @@ class GUI():
 		# setup vars
 		self.settings = settings
 		self.open_tabs = Dict({'Main': Dict({'name': 'Main'})})
-		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/reload': 'reupdate all works in tab', '/refresh': 'redraw table', '/save': 'save all works in tab', '/close': 'close current tab', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
+		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/save': 'save all works in tab', '/reupdate': 'reupdate all works in tab', 'reload': 'close and reopen tab (without saving)', '/refresh': 'redraw table', '/close': 'close current tab (without saving)', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
 		# create tab holder
 		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs:
 			# create main tab
@@ -499,37 +499,45 @@ class GUI():
 		from requests_html2 import AsyncHTMLSession
 		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
 			async_fix()
-			if 'links' in work.prop:
-				for link in work.links:  # type: ignore
-					async with self.workers:
-						# if debug tab open
-						if 'debug' in self.open_tabs:
-							self.open_tabs.debug.updating.add_rows({'name': link.link})
-						new = await link.update(self.renderers, self.settings['sites'], async_session)
-						# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
-						if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
-							await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
-						else:
-							await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
-						# if debug tab open
-						if 'debug' in self.open_tabs:
-							self.open_tabs.debug.updating.remove_rows({'name': link.link})
-							self.open_tabs.debug.done.add_rows({'name': link.link})
+			try:
+				if 'links' in work.prop:
+					for link in work.links:  # type: ignore
+						async with self.workers:
+							# if debug tab open
+							if 'debug' in self.open_tabs:
+								self.open_tabs.debug.updating.add_rows({'name': link.link})
+							new = await link.update(self.renderers, self.settings['sites'], async_session)
+							# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
+							if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
+								await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
+							else:
+								await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
+							# if debug tab open
+							if 'debug' in self.open_tabs:
+								self.open_tabs.debug.updating.remove_rows({'name': link.link})
+								self.open_tabs.debug.done.add_rows({'name': link.link})
+			except asyncio.CancelledError:
+				pass  # TODO: if debug tab open, remove work from 'updating' column/card
 
-		# async_session = AsyncHTMLSession()
 		async with AsyncHTMLSession() as async_session:
-			await asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works])
-		print('done updating')
-
-	# def update_row(self, ):
-	# 	# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
-	# 	if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
-	# 		await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
-	# 	else:
-	# 		await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
+			tab.tasks = asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works], return_exceptions=True)
+			await tab.tasks
+		print('done updating', tab.name)
+	if None:  # to fold def update_row
+		# def update_row(self, ):
+		# 	# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
+		# 	if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
+		# 		await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
+		# 	else:
+		# 		await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
+		pass
 	def close_tab(self, tab_name: str) -> None:
 		'closes indicated tab'
+		# get tab
 		tab = self.open_tabs[tab_name]
+		# cancel updating works in tab
+		tab.tasks.cancel()
+		# delete stuff
 		tab.panel.delete()
 		tab.tab.delete()
 		# switch to main tab
@@ -540,6 +548,7 @@ class GUI():
 		if event.sender.value[0] == '/':
 			# get name of open tab
 			name = self.tabs._props['model-value']
+			tab = self.open_tabs[name]
 			command = event.sender.value
 			# if is help command: list all commands
 			if command == '/help':
@@ -551,25 +560,27 @@ class GUI():
 			elif command == '/reupdate':
 				# if is not the main tab
 				if name != 'Main':
-					await self.update_all(self.open_tabs[name])
+					tab.tasks.cancel()
+					await self.update_all(tab)
 			# if is refresh command: re"draw" grid
 			elif command == '/refresh':
 				self.re_grid(tab_name=name)
-			# if is save, close, or exit command: save all works in tab and
-			elif command in {'/save', '/close', '/exit'}:
-				save_to_file(self.open_tabs[name].works, self.settings['json_files_dir'] + name + '.json')
-				ui.notify('Saved ' + name)
-				if command == '/close' and name != 'Main':
-					self.close_tab(name)
-				elif command == '/exit':
-					app.shutdown()
-			# if is quit command: exit without saving
-			elif command == '/quit':
-				app.shutdown()
 			# if is reload: re load file
 			elif command == '/reload':
 				self.close_tab(name)
 				await self._file_opened(Dict({'args': {'data': {'name': name}}}))
+			# if is save or exit command: save all works in tab and
+			elif command in {'/save', '/exit'}:
+				save_to_file(tab.works, self.settings['json_files_dir'] + name + '.json')
+				ui.notify('Saved ' + name)
+				if command == '/exit':
+					app.shutdown()
+			# if is close command: close current tab
+			elif command == '/close' and name != 'Main':
+				self.close_tab(name)
+			# if is quit command: exit without saving
+			elif command == '/quit':
+				app.shutdown()
 		# clear input
 		event.sender.set_value(None)
 	def debug(self):

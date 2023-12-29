@@ -215,10 +215,8 @@ class GUI():
 		self.settings = settings
 		self.open_tabs = Dict({'Main': Dict({'name': 'Main'})})
 		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/save': 'save all works in tab', '/reupdate': 'reupdate all works in tab', '/reload': 'close and reopen tab (without saving)', '/refresh': 'redraw table', '/close': 'close current tab (without saving)', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
-		# create tab holder
-		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs:
-			# create main tab
-			tab = ui.tab('Main')
+		# create tab holder with main tab
+		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs: tab = ui.tab('Main')
 		# create panel holder
 		with ui.tab_panels(self.tabs, value=tab) as self.panels:
 			# create main panel
@@ -248,6 +246,24 @@ class GUI():
 		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self.handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 	def _main(self) -> None:
 		pass
+	def _debug(self):
+		'opens debug tab'
+		# if debug tab is allready open, switch to it
+		if 'debug' in self.open_tabs:
+			self.switch_tab(Dict({'args': 'Debug'}))
+			return
+		# else create tab
+		self.open_tabs.debug = Dict()
+		with self.tabs:
+			ui.tab('Debug')
+		with self.panels:
+			with ui.tab_panel('Debug').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+				ui.label('Updating:')
+				with ui.row().classes('w-full'):
+					self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
+					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
+		# switch to tab
+		self.switch_tab(Dict({'args': 'Debug'}))
 	def jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
 		'upgrade aggrid from community to enterprise'
 		from nicegui.dependencies import register_library
@@ -324,24 +340,6 @@ class GUI():
 				del tmp['links']
 				rows.append({'id': (num_work, num_link), 'link': link.link, 'nChs': link.new, **tmp})
 		return [format_rowData(row, self.settings['to_display'][tab_name]) for row in rows]
-	def debug(self):
-		'opens debug tab'
-		# if debug tab is allready open, switch to it
-		if 'debug' in self.open_tabs:
-			self.switch_tab(Dict({'args': 'Debug'}))
-			return
-		# else create tab
-		self.open_tabs.debug = Dict()
-		with self.tabs:
-			ui.tab('Debug')
-		with self.panels:
-			with ui.tab_panel('Debug').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
-				ui.label('Updating:')
-				with ui.row().classes('w-full'):
-					self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
-					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
-		# switch to tab
-		self.switch_tab(Dict({'args': 'Debug'}))
 	def re_grid(self, tab: Dict = None, tab_name: str = None) -> None:
 		'reloads the grid of the specified tab'
 		if tab is None:
@@ -573,7 +571,6 @@ class GUI():
 			await tab.tasks
 		print('done updating', tab.name)
 	async def handle_input(self, event: GenericEventArguments):
-		import sys
 		# if is a command
 		if event.sender.value[0] == '/':
 			# get name of open tab
@@ -585,7 +582,7 @@ class GUI():
 				print([f"{key}: {val}" for key, val in self.commands.items()])
 			# if is debug command: open debug tab
 			elif command == '/debug':
-				self.debug()
+				self._debug()
 			# if is reload command and not the main tab: reupdate all
 			elif command == '/reupdate' and name != 'Main':
 				tab.tasks.cancel()
@@ -596,7 +593,8 @@ class GUI():
 			# if is reload: re load file
 			elif command == '/reload':
 				if name == 'Main':
-					pass
+					files = [{'name': file.split('.json')[0]} for file in os.listdir(self.settings['json_files_dir']) if file.split('.')[-1] == 'json']
+					tab.grid.run_grid_method('setGridOption', ('rowData', files))
 				else:
 					self.close_tab(name)
 					await self._file_opened(Dict({'args': {'data': {'name': name}}}))
@@ -612,14 +610,12 @@ class GUI():
 						ui.notify('Saved ' + name)
 				# close app
 				app.shutdown()
-				sys.exit()
 			# if is close command: close current tab
 			elif command == '/close' and name != 'Main':
 				self.close_tab(name)
 			# if is quit command: exit without saving
 			elif command == '/quit':
 				app.shutdown()
-				sys.exit()
 		# clear input
 		event.sender.set_value(None)
 	if None:  # to fold def update_row
@@ -673,8 +669,9 @@ sites:  # site,         find,        with,                       then_find, and 
 
 '''
 def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args):
-	'Main function, being "revised"'
-	import os
+	'Main function'
+	# change environmental variables
+	os.environ["MATPLOTLIB"] = "false"
 	# change working directory to where file is located unless specified otherwise, just in case
 	os.chdir(dir or os.path.dirname(os.path.realpath(__file__)))
 	if __debug__: print(f'working directory: {os.getcwd()}')

@@ -20,11 +20,7 @@ class Work():
 		if kwargs['name'] == '': kwargs['name'] = self.__class__.all.__len__  # type: ignore
 		# set self properties to default property values
 		self.__dict__.update(self.prop)
-		# # add self to Works.all
-		# Work.all.append(self)  # type: ignore
-		# # add self to it's class' all dict with name as key
-		# self.__class__.all[kwargs['name']] = self  # type: ignore
-		# for every kwarg given or from args, format it and update `self.__dict__` with it
+		# for every kwarg, format it and update `self.__dict__` with it
 		for key, val in kwargs.items():
 			# if key of kwarg is in properties
 			if key in self.__dict__:
@@ -40,8 +36,11 @@ class Work():
 						val = val[0]
 				# if default val is list and given val is not list then put given val in a list
 				elif self.prop[key].__class__ is list and val.__class__ is not list: val = [val]
-				# if default val is float and given val is not float then float given val
-				if self.prop[key].__class__ is int and type(val) is not float: val = float(val)
+				# if default val is int or float and given val is not float then float given val
+				if self.prop[key].__class__ in (int, float) and type(val) not in (int, float): val = float(val)
+				# if default val is int and given val is a decimalles (without decimals) float : convert to int
+				if val.__class__ is float and int(val) == val:
+					val = int(val)
 				# change self property value to given kwarg value
 				self.__dict__.update({key: val})
 		# if self has links then turn links into Link objects
@@ -90,7 +89,7 @@ class Link():
 		self.link = link
 		self.parent = parent
 		self.new = self.latest = ''
-	async def update(self, renderers: asyncio.Semaphore, sites: dict, async_session) -> float | Exception:
+	async def update(self, renderers: asyncio.Semaphore, sites: dict, tags_to_skip: list, async_session) -> float | Exception:
 		'''Finds latest chapter from `self.link` then sets result or an error code to `self.latest`
 		# Error Codes:
 			-999.1 = site not supported
@@ -106,12 +105,18 @@ class Link():
 		# variables
 		link = self.link
 		sites = sites[self.site]
-		# if "special" tags are in link, skip, #TODO: specify these tags in settings
+		# if tags specified in settings are in work, skip
 		if 'tags' in self.parent.prop:
-			tags = self.parent.tags
-			if ('do not check for updates' in tags) or ('Complete' in tags and 'Read' in tags) or ('Oneshot' in tags and 'Read' in tags) or ('Two Shot' in tags and 'Read' in tags):
-				self.latest = Exception('skiped')
-				return self.re(0)
+			# for each tag/list of tags that are to be skipped
+			for tag in tags_to_skip:
+				# if tag is str and in work, "skip"
+				if tag.__class__ is str and tag in self.parent.tags:
+					self.latest = Exception('skipped')
+					return self.re(0)
+				# if tag is list and all tags in list are in work
+				elif tag.__class__ is list and all([t in self.parent.tags for t in tag]):
+					self.latest = Exception('skipped')
+					return self.re(0)
 		# tmp: special stuff for bato.to
 		if self.site == 'bato.to': link = self.link.replace('title/', 'rss/series/') + '.xml'
 		# connecting to site
@@ -181,6 +186,9 @@ class Link():
 		# convert remaining html to float
 		try:
 			self.latest = float(re.split(sites[4], link)[sites[5]])  # else link parsing went fine: extract latest chapter from link using lookup table
+			# convert latest chapter to int if has .0
+			if float(self.latest) == self.latest:
+				self.latest = float(self.latest)
 		except Exception as e:
 			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # whatever was extracted was not a number
@@ -208,7 +216,7 @@ class GUI():
 		# setup vars
 		self.settings = settings
 		self.open_tabs = Dict({'Main': Dict({'name': 'Main'})})
-		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/save': 'save all works in tab', '/reupdate': 'reupdate all works in tab', 'reload': 'close and reopen tab (without saving)', '/refresh': 'redraw table', '/close': 'close current tab (without saving)', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
+		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/save': 'save all works in tab', '/reupdate': 'reupdate all works in tab', '/reload': 'close and reopen tab (without saving)', '/refresh': 'redraw table', '/close': 'close current tab (without saving)', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
 		# create tab holder
 		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs:
 			# create main tab
@@ -506,7 +514,7 @@ class GUI():
 							# if debug tab open
 							if 'debug' in self.open_tabs:
 								self.open_tabs.debug.updating.add_rows({'name': link.link})
-							new = await link.update(self.renderers, self.settings['sites'], async_session)
+							new = await link.update(self.renderers, self.settings['sites'], self.settings['tags_to_skip'], async_session)
 							# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
 							if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
 								await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
@@ -544,6 +552,7 @@ class GUI():
 		del self.open_tabs[tab_name]
 		self.switch_tab(Dict({'args': 'Main'}))
 	async def handle_input(self, event: GenericEventArguments):
+		import sys
 		# if is a command
 		if event.sender.value[0] == '/':
 			# get name of open tab
@@ -556,31 +565,40 @@ class GUI():
 			# if is debug command: open debug tab
 			elif command == '/debug':
 				self.debug()
-			# if is reload command: reupdate all
-			elif command == '/reupdate':
-				# if is not the main tab
-				if name != 'Main':
-					tab.tasks.cancel()
-					await self.update_all(tab)
+			# if is reload command and not the main tab: reupdate all
+			elif command == '/reupdate' and name != 'Main':
+				tab.tasks.cancel()
+				await self.update_all(tab)
 			# if is refresh command: re"draw" grid
 			elif command == '/refresh':
 				self.re_grid(tab_name=name)
 			# if is reload: re load file
 			elif command == '/reload':
-				self.close_tab(name)
-				await self._file_opened(Dict({'args': {'data': {'name': name}}}))
+				if name == 'Main':
+					pass
+				else:
+					self.close_tab(name)
+					await self._file_opened(Dict({'args': {'data': {'name': name}}}))
 			# if is save or exit command: save all works in tab and
-			elif command in {'/save', '/exit'}:
+			elif command == '/save' and name != 'Main':
 				save_to_file(tab.works, self.settings['json_files_dir'] + name + '.json')
 				ui.notify('Saved ' + name)
-				if command == '/exit':
-					app.shutdown()
+			elif command == '/exit':
+				# save all open tabs
+				for name, tab in self.open_tabs.items():
+					if name != 'Main':
+						save_to_file(tab.works, self.settings['json_files_dir'] + name + '.json')
+						ui.notify('Saved ' + name)
+				# close app
+				app.shutdown()
+				sys.exit()
 			# if is close command: close current tab
 			elif command == '/close' and name != 'Main':
 				self.close_tab(name)
 			# if is quit command: exit without saving
 			elif command == '/quit':
 				app.shutdown()
+				sys.exit()
 		# clear input
 		event.sender.set_value(None)
 	def debug(self):
@@ -615,6 +633,7 @@ class GUI():
 default_settings = '''
 dark_mode: true  # default: true
 json_files_dir: ./  # default: ./
+tags_to_skip: [Skip, [Complete, Read]]  # works with specified tags will have update skipped and be hidden, [A, [B, C]] = A or (B and C)
 font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
 default_column_width: 16  # default: 16
 row_height: 32  # default: 32
@@ -632,23 +651,23 @@ scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1
 sites_ignore: []
 # prettier-ignore
 sites:  # site,         find,        with,                       then_find, and get,       split at, then get, render?
-    www.royalroad.com:  &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
-    www.webtoons.com:   &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
-    bato.to:            &003 [item,  null,                       title,     null,          ' ',      -1,       false]
-    mangabuddy.com:     &004 [div,   class: latest-chapters,     a,         href,          '-',      -1,       false]
-    mangapuma.com:      &005 [div,   id: chapter-list-inner,     a,         href,          '-',      -1,       false]
-    www.manga-raw.club: &006 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
-    zahard.xyz:         &007 [ul,    class: chapters,            a,         href,          /,        -1,       false]
-    manganato.com:      &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
-    reaper-scans.com:   &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
-    manhuaplus.com:     &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
-    mangadex.org:       &011 [div,   class: text-center,         null,      null,          '-',      -1,       true]
+    www.royalroad.com: &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
+    www.webtoons.com:  &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
+    bato.to:           &003 [item,  null,                       title,     null,          ' ',      -1,       false]
+    mangafire.to:      &004 [div,   class: list-body,           li,        data-number,   ' ',      0,        false]
+    mangabuddy.com:    &005 [div,   class: latest-chapters,     a,         href,          '-',      -1,       false]
+    www.mgeko.com:     &006 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+    zahard.xyz:        &007 [ul,    class: chapters,            a,         href,          /,        -1,       false]
+    manganato.com:     &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
+    reaper-scans.com:  &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+    manhuaplus.com:    &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
+    mangadex.org:      &011 [div,   class: text-center,         null,      null,          -|\.,     -1,       true]
     null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]  # for aligning reasons
-    www.mcreader.net:   *006
-    www.mangageko.com:  *006
-    chapmanganato.com:  *008
-    readmanganato.com:  *008
-    # flamescans.org:   *009
+    www.mcreader.net:  *006
+    www.mangageko.com: *006
+    chapmanganato.com: *008
+    readmanganato.com: *008
+    # flamescans.org:  *009
 
 '''
 def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args):

@@ -1,5 +1,6 @@
 dark_mode: true  # default: true
 json_files_dir: ../MangaRock - Private/ # default: ./
+tags_to_skip: [Skip, Explicit, [Complete, Read], [Oneshot, Read], [Twoshot, Read]] # works with specified tags will have update skipped and be hidden, [A, [B, C]] = A or (B and C)
 font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
 default_column_width: 32  # default: 16
 row_height: 32  # default: 32
@@ -26,12 +27,10 @@ sites:  # site,        find,        with,                       then_find, and g
     mangafire.to:      &004 [div,   class: list-body,           li,        data-number,   ' ',      0,        false]
     mangabuddy.com:    &005 [div,   class: latest-chapters,     a,         href,          '-',      -1,       false]
     www.mgeko.com:     &006 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
-    zahard.xyz:        &007 [ul,    class: chapters,            a,         href,          /,        -1,       false]
     manganato.com:     &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
     reaper-scans.com:  &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
-    manhuaplus.com:    &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
     mangadex.org:      &011 [div,   class: text-center,         null,      null,          -|\.,     -1,       true]
-    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]  # for aligning reasons
+    null: [*001, *002, *003, *004, *005, *006, *008, *009, *011]  # for aligning reasons
     www.mcreader.net:  *006
     www.mangageko.com: *006
     chapmanganato.com: *008

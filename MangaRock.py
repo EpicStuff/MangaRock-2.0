@@ -1,4 +1,4 @@
-# Version: 3.4.2
+# Version: 3.4.3
 import asyncio, os
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
@@ -210,8 +210,6 @@ class Link():
 		'represent `self` as `self.link` between <>'
 		return f'<{self.link}>'  # type: ignore
 class GUI():
-	def _input(self) -> ui.input:
-		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self.handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 	def __init__(self, settings: dict, files: list[dict[str, str]]) -> None:
 		# setup vars
 		self.settings = settings
@@ -246,6 +244,10 @@ class GUI():
 		# css stuff and stuff
 		ui.query('div').style('gap: 0')
 		app.on_connect(self._on_reload)
+	def _input(self) -> ui.input:
+		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self.handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
+	def _main(self) -> None:
+		pass
 	def jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
 		'upgrade aggrid from community to enterprise'
 		from nicegui.dependencies import register_library
@@ -322,6 +324,45 @@ class GUI():
 				del tmp['links']
 				rows.append({'id': (num_work, num_link), 'link': link.link, 'nChs': link.new, **tmp})
 		return [format_rowData(row, self.settings['to_display'][tab_name]) for row in rows]
+	def debug(self):
+		'opens debug tab'
+		# if debug tab is allready open, switch to it
+		if 'debug' in self.open_tabs:
+			self.switch_tab(Dict({'args': 'Debug'}))
+			return
+		# else create tab
+		self.open_tabs.debug = Dict()
+		with self.tabs:
+			ui.tab('Debug')
+		with self.panels:
+			with ui.tab_panel('Debug').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+				ui.label('Updating:')
+				with ui.row().classes('w-full'):
+					self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
+					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
+		# switch to tab
+		self.switch_tab(Dict({'args': 'Debug'}))
+	def re_grid(self, tab: Dict = None, tab_name: str = None) -> None:
+		'reloads the grid of the specified tab'
+		if tab is None:
+			tab = self.open_tabs[tab_name]
+		tab.grid.call_api_method('setRowData', self.generate_rowData(tab.works, [], tab.name))
+	def close_tab(self, tab_name: str) -> None:
+		'closes indicated tab'
+		# get tab
+		tab = self.open_tabs[tab_name]
+		# cancel updating works in tab
+		tab.tasks.cancel()
+		# delete stuff
+		tab.panel.delete()
+		tab.tab.delete()
+		# switch to main tab
+		del self.open_tabs[tab_name]
+		self.switch_tab(Dict({'args': 'Main'}))
+	def _on_reload(self):
+		for tab_name in self.open_tabs:
+			if tab_name not in {'Main', 'Debug'}:
+				self.re_grid(tab_name=tab_name)
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
@@ -531,26 +572,6 @@ class GUI():
 			tab.tasks = asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works], return_exceptions=True)
 			await tab.tasks
 		print('done updating', tab.name)
-	if None:  # to fold def update_row
-		# def update_row(self, ):
-		# 	# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
-		# 	if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
-		# 		await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
-		# 	else:
-		# 		await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
-		pass
-	def close_tab(self, tab_name: str) -> None:
-		'closes indicated tab'
-		# get tab
-		tab = self.open_tabs[tab_name]
-		# cancel updating works in tab
-		tab.tasks.cancel()
-		# delete stuff
-		tab.panel.delete()
-		tab.tab.delete()
-		# switch to main tab
-		del self.open_tabs[tab_name]
-		self.switch_tab(Dict({'args': 'Main'}))
 	async def handle_input(self, event: GenericEventArguments):
 		import sys
 		# if is a command
@@ -601,33 +622,14 @@ class GUI():
 				sys.exit()
 		# clear input
 		event.sender.set_value(None)
-	def debug(self):
-		'opens debug tab'
-		# if debug tab is allready open, switch to it
-		if 'debug' in self.open_tabs:
-			self.switch_tab(Dict({'args': 'Debug'}))
-			return
-		# else create tab
-		self.open_tabs.debug = Dict()
-		with self.tabs:
-			ui.tab('Debug')
-		with self.panels:
-			with ui.tab_panel('Debug').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
-				ui.label('Updating:')
-				with ui.row().classes('w-full'):
-					self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
-					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
-		# switch to tab
-		self.switch_tab(Dict({'args': 'Debug'}))
-	def _on_reload(self):
-		for tab_name in self.open_tabs:
-			if tab_name not in {'Main', 'Debug'}:
-				self.re_grid(tab_name=tab_name)
-	def re_grid(self, tab: Dict = None, tab_name: str = None) -> None:
-		'reloads the grid of the specified tab'
-		if tab is None:
-			tab = self.open_tabs[tab_name]
-		tab.grid.call_api_method('setRowData', self.generate_rowData(tab.works, [], tab.name))
+	if None:  # to fold def update_row
+		# def update_row(self, ):
+		# 	# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
+		# 	if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
+		# 		await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
+		# 	else:
+		# 		await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
+		pass
 
 
 default_settings = '''

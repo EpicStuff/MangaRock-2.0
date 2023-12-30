@@ -1,3 +1,5 @@
 nicegui
 ruamel.yaml
-requests-html
+requests-html2
+rich
+lxml

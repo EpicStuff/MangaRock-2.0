@@ -573,7 +573,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 								with tab.grid:
 									ui.run_javascript(f'''
 										var grid = getElement({tab.grid.id}).gridOptions.api;
-										var node = grid.getRowNode({link.link}).data
+										var node = grid.getRowNode('{link.link}').data
 										grid.applyTransaction({{remove: [node]}})
 									''')
 							else:
@@ -583,8 +583,8 @@ class GUI():  # pylint: disable=missing-class-docstring
 								with tab.grid:
 									ui.run_javascript(f'''
 										var grid = getElement({tab.grid.id}).gridOptions.api;
-										var node = grid.getRowNode({link.link}).data;
-										node['nChs'] = {new};
+										var node = grid.getRowNode('{link.link}').data;
+										node.nChs = {new};
 										grid.applyTransaction({{update: [node]}});
 									''')
 							# if debug tab open

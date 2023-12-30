@@ -13,7 +13,7 @@ to_display:  # columns to display for each Type, do not include name (it's requi
 workers: 8  # default: 3
 renderers: 3  # default: 1
 hide_unupdated_works: true  # default: true
-hide_works_with_no_links: true  # default: true
+hide_works_with_no_links: false # default: true
 hide_updates_with_errors: false  # default: false
 sort_by: score  # default: score, score is currently only working option
 # prettier-ignore

@@ -298,49 +298,50 @@ class GUI():  # pylint: disable=missing-class-docstring
 		'switch to tab indicated by event'
 		self.tabs.props(f"model-value={event.args}")
 		self.panels.props(f"model-value={event.args}")
-	def generate_rowData(self, works: Iterable, rows: list, tab_name: str) -> list:  # pylint: disable=invalid-name
+	def generate_rowData(self, works: Iterable) -> list:  # pylint: disable=invalid-name
 		'turns list of works into list of rows that aggrid can use and group'
+		rows = []
 		# for each work in works
-		for work_num, work in enumerate(works):
+		for work in works:
 			# if work format has no links or work has no links
 			if 'links' not in work.prop or work.links == []:
 				# if hide_works_with_no_links then skip this work
 				if self.settings['hide_works_with_no_links']:
 					continue
 				# else: add work to rows
-				rows.append(work.__dict__)
-				# rows[-1]['id'] = num_work  # this line may be redundant
+				rows.append(work.__dict__)  # TODO: do the shuffle up thing but down for works with no links
 			else:
 				# for each link in work
-				for link_num, link in enumerate(work.links):
+				for link in work.links:
 					# if link has updated and has no new chapters and hide_unupdated_works
 					if link.new != '' and link.new == 0 and self.settings['hide_unupdated_works']:
 						# skip this link
 						continue
 					# process link and add it to rows
-					# tmp = work.__dict__.copy()
-					# del tmp['links']
-					rows.append({**work.__dict__, 'links': None,'link': link.link, 'nChs': link.new})
-					# rows.append({'id': (work_num, link_num), 'link': link.link, 'nChs': link.new, **tmp})
+					rows.append({**work.__dict__, 'links': None, 'link': link.link, 'nChs': link.new})
 
+		############################
+		# Options:
+		#  1. generate rowdata into a dict then convert dict into list, reconvert each time rowdata is updated
+		#  3. index though rowdata to update rowdata
 
 		new_rows = []
 
 		for row in rows:
-			cols = self.settings['to_display'][tab_name]
+			# cols = dict(self.settings['to_display'][tab_name])
 
-			# remove the columns that are not grouped
-			cols = dict(cols)
-			for key, val in cols.copy().items():
-				if val[1] != 'group':
-					del cols[key]
-			cols = list(cols.keys()) + ['link']
+			# # remove the columns that are not grouped
+			# for key, val in cols.copy().items():
+			# 	if val[1] != 'group':
+			# 		del cols[key]
+			# cols = list(cols.keys()) + ['link']
 			# add link, name identifiers
-			try:
-				row['link'] += '‎'
-			except KeyError:  # if row is not a link
-				cols = cols[:-1]  # remove link from cols
-			row['name'] += '‏'  # pylint: disable=bidirectional-unicode
+			# try:
+			# 	row['link'] += '‎'
+			# except KeyError:  # if row is not a link
+			# 	# cols = cols[:-1]  # remove link from cols
+			# 	pass
+			# row['name'] += '‏'  # pylint: disable=bidirectional-unicode
 			new_rows.append(row)
 
 		return new_rows
@@ -403,14 +404,14 @@ class GUI():  # pylint: disable=missing-class-docstring
 		tab = self.open_tabs[file] = Dict({'name': file, 'works': works, 'links': {}})
 		tab.reading = None
 		tab.open = set()
-		# create links dict with "index" of link
+		'''# create links dict with "index" of link
 		num = 0
 		for work in works:
 			for link in work.links:
 				tab.links[link.link] = num
-				num += 1
+				num += 1'''
 		# generate rowData
-		tab.rows = self.generate_rowData(works, [], file)
+		tab.rows = self.generate_rowData(works)
 		# create and switch to tab for file
 		with self.tabs:
 			tab.tab = ui.tab(file)
@@ -433,9 +434,11 @@ class GUI():  # pylint: disable=missing-class-docstring
 					'columnDefs': cols,
 					'rowData': tab.rows,
 					'rowHeight': self.settings['row_height'],
+					# ':getRowHeight': 'params => params.data.nChs < 0 ? 5 : 25',  # TODO: tmp
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
-					'groupAllowUnbalanced': True
+					'groupAllowUnbalanced': True,
+					':getRowId': 'params => params.data.link'
 				}
 				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)'))
 				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
@@ -568,16 +571,20 @@ class GUI():  # pylint: disable=missing-class-docstring
 							# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
 							if (new == 0 and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
 								with tab.grid:
-									ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})')
+									ui.run_javascript(f'''
+										var grid = getElement({tab.grid.id}).gridOptions.api;
+										var node = grid.getRowNode({link.link}).data
+										grid.applyTransaction({{remove: [node]}})
+									''')
 							else:
-								# update "server side" data
-								tab.rows[tab.links[link.link]]['nChs'] = new
+								# # update "server side" data
+								# tab.rows[tab.links[link.link]]['nChs'] = new
 								# update "client side" data
 								with tab.grid:
 									ui.run_javascript(f'''
 										var grid = getElement({tab.grid.id}).gridOptions.api;
-										var node = grid.getRowNode({tab.links[link.link]}).data;
-										node.nChs = {new};
+										var node = grid.getRowNode({link.link}).data;
+										node['nChs'] = {new};
 										grid.applyTransaction({{update: [node]}});
 									''')
 							# if debug tab open
@@ -641,6 +648,10 @@ class GUI():  # pylint: disable=missing-class-docstring
 			# if is quit command: exit without saving
 			elif command == '/quit':
 				app.shutdown()
+			elif command == '/test':
+				del tab.rows[1]
+			else:
+				pass  # TODO: do the eval thing
 		# clear input
 		event.sender.set_value(None)
 

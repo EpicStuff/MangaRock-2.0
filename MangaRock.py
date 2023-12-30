@@ -6,13 +6,10 @@ from typing import Any, Iterable
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
 
-from rich.console import Console;
-from rich.traceback import install;
+from rich.console import Console; console = Console()
+# from rich.traceback import install; install(width=os.get_terminal_size().columns)  # pylint: disable=wrong-import-position
 
-from stuff import Dict
-
-console = Console()
-install(width=os.get_terminal_size().columns)
+from stuff import Dict  # pylint: disable=wrong-import-position
 
 
 class Work():
@@ -58,7 +55,7 @@ class Work():
 		'updates `self.{what}` based on `self.{source}`'
 		self.__dict__[what] = max([link.latest for link in self.__dict__[source] if not issubclass(link.latest.__class__, Exception)])
 		if what == 'chapter' and source == 'links':
-			for link in self.links:
+			for link in self.links:  # pylint: disable=no-member
 				link.re()
 	@classmethod
 	def sort(cls, sort_by: str = 'name', look_up_table: dict | None = None, reverse: bool = True) -> None:
@@ -227,7 +224,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# setup vars
 		self.settings = settings
 		self.open_tabs = Dict({'Main': Dict({'name': 'Main'})})
-		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/save': 'save all works in tab', '/reupdate': 'reupdate all works in tab', '/reload': 'close and reopen tab (without saving)', '/refresh': 'redraw table', '/close': 'close current tab (without saving)', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
+		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/save': 'save all works in tab', '/reupdate': 'reupdate all works in tab', '/reload': 'close and reopen tab (without saving)', '/refresh': 'redraw table, Deprecated: just reload instead', '/close': 'close current tab (without saving)', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
 		# create tab holder with main tab
 		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs: tab = ui.tab('Main')
 		# create panel holder
@@ -254,7 +251,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
 		# css stuff and stuff
 		ui.query('div').style('gap: 0')
-		app.on_connect(self._on_reload)
+		'app.on_connect(self._on_reload)'
 	def _input(self) -> ui.input:
 		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self.handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 	def _main(self) -> None:
@@ -318,7 +315,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 				cols = cols[:-1]  # remove link from cols
 			row['name'] += '‏'  # pylint: disable=bidirectional-unicode
 			# shuffle "row"s "up"
-			for col in range(len(cols)):  # for each col
+			'''for col in range(len(cols)):  # for each col
 				try:
 					while row[cols[col]] is None:  # while the col is empty
 						# shuffle cols "up"
@@ -327,7 +324,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 						# set last col to empty
 						row[cols[-1]] = ' '
 				except Exception as e:  # skip row if error, i think
-					print('format_rowData error:', e)
+					print('format_rowData error:', e)'''
 			return row
 		# for each work in works
 		for num_work, work in enumerate(works):
@@ -356,11 +353,11 @@ class GUI():  # pylint: disable=missing-class-docstring
 				del tmp['links']
 				rows.append({'id': (num_work, num_link), 'link': link.link, 'nChs': link.new, **tmp})
 		return [format_rowData(row, self.settings['to_display'][tab_name]) for row in rows]
-	def re_grid(self, tab: Dict = None, tab_name: str = None) -> None:
+	'''def re_grid(self, tab: Dict = None, tab_name: str = None) -> None:
 		'reloads the grid of the specified tab'
 		if tab is None:
 			tab = self.open_tabs[tab_name]
-		tab.grid.call_api_method('setRowData', self.generate_rowData(tab.works, [], tab.name))
+		tab.grid.run_grid_method('setGridOption', ('rowData', self.generate_rowData(tab.works, [], tab.name)))'''
 	def close_tab(self, tab_name: str) -> None:
 		'closes indicated tab'
 		# get tab
@@ -373,24 +370,26 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# switch to main tab
 		del self.open_tabs[tab_name]
 		self.switch_tab(Dict({'args': 'Main'}))
-	def _on_reload(self):
+	'''def _on_reload(self):
 		for tab_name in self.open_tabs:
 			if tab_name not in {'Main', 'Debug'}:
-				self.re_grid(tab_name=tab_name)
+				self.re_grid(tab_name=tab_name)'''
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			from json import load
-			def add_work(_format: str | Work, *args, **kwargs) -> Work:
+			def add_work(*args, _format: str | Work = None, **kwargs) -> Work:
 				'formats `Type` argument and returns the created object'
-				from ast import literal_eval
-
+				# if no `_format` is provided: look for `format` in `kwargs`
+				if _format is None:
+					assert 'format' in kwargs, 'work has no format specified'
+					_format = kwargs['format']
 				# if the format is a string, turn in into an object
 				if _format.__class__ is str:
-					_format = literal_eval(_format)
+					_format = eval(_format)  # pylint: disable=eval-used
 				# return works object
-				return format(*args, **kwargs)  # type: ignore
+				return _format(*args, **kwargs)  # type: ignore
 
 			with open(file, 'r', encoding='utf8') as f:
 				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
@@ -419,7 +418,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 				tab.links[link.link] = num
 				num += 1
 		# generate rowData
-		rows = self.generate_rowData(works, [], file)
+		tab.rows = self.generate_rowData(works, [], file)
 		# create and switch to tab for file
 		with self.tabs:
 			tab.tab = ui.tab(file)
@@ -440,10 +439,11 @@ class GUI():  # pylint: disable=missing-class-docstring
 						'field': 'link',
 					},
 					'columnDefs': cols,
-					'rowData': rows,
+					'rowData': tab.rows,
 					'rowHeight': self.settings['row_height'],
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
+					'groupAllowUnbalanced': True
 				}
 				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)'))
 				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
@@ -563,8 +563,8 @@ class GUI():  # pylint: disable=missing-class-docstring
 	async def update_all(self, tab: Dict) -> None:
 		'updates all works provided'
 		from requests_html2 import AsyncHTMLSession
+
 		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
-			async_fix()
 			try:
 				if 'links' in work.prop:
 					for link in work.links:  # type: ignore
@@ -574,16 +574,26 @@ class GUI():  # pylint: disable=missing-class-docstring
 								self.open_tabs.debug.updating.add_rows({'name': link.link})
 							new = await link.update(self.renderers, self.settings['sites'], self.settings['tags_to_skip'], async_session)
 							# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
-							if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
-								await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
+							if (new == 0 and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
+								with tab.grid:
+									ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})')
 							else:
-								await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
+								# update "server side" data
+								tab.rows[tab.links[link.link]]['nChs'] = new
+								# update "client side" data
+								with tab.grid:
+									ui.run_javascript(f'''
+										var grid = getElement({tab.grid.id}).gridOptions.api;
+										var node = grid.getRowNode({tab.links[link.link]}).data;
+										node.nChs = {new};
+										grid.applyTransaction({{update: [node]}});
+									''')
 							# if debug tab open
 							if 'debug' in self.open_tabs:
 								self.open_tabs.debug.updating.remove_rows({'name': link.link})
 								self.open_tabs.debug.done.add_rows({'name': link.link})
-			except asyncio.CancelledError:
-				pass  # TODO: if debug tab open, remove work from 'updating' column/card
+			except asyncio.CancelledError as e:
+				print(e)  # TODO: if debug tab open, remove work from 'updating' column/card
 
 		async with AsyncHTMLSession() as async_session:
 			tab.tasks = asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works], return_exceptions=True)
@@ -591,6 +601,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 		print('done updating', tab.name)
 	async def handle_input(self, event: GenericEventArguments):
 		'handles input from input box'
+		# if input is empty, do nothing
+		if event.sender.value == '':
+			return
 		# if is a command
 		if event.sender.value[0] == '/':
 			# get name of open tab
@@ -609,7 +622,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 				await self.update_all(tab)
 			# if is refresh command: re"draw" grid
 			elif command == '/refresh':
-				self.re_grid(tab_name=name)
+				tab.grid.update()
 			# if is reload: re load file
 			elif command == '/reload':
 				if name == 'Main':
@@ -638,14 +651,6 @@ class GUI():  # pylint: disable=missing-class-docstring
 				app.shutdown()
 		# clear input
 		event.sender.set_value(None)
-	if None:  # to fold def update_row, pylint: disable=using-constant-test
-		# def update_row(self, ):
-		# 	# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
-		# 	if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
-		# 		await ui.run_javascript(f'var grid = getElement({tab.grid.id}).gridOptions.api; grid.applyTransaction({{remove: [grid.getRowNode({tab.links[link.link]}).data]}})', respond=False)
-		# 	else:
-		# 		await ui.run_javascript(f"getElement({tab.grid.id}).gridOptions.api.getRowNode({tab.links[link.link]}).setDataValue('nChs', {new})", respond=False)
-		pass
 
 
 # pylint: disable-next=invalid-name
@@ -729,10 +734,6 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 	except FileNotFoundError as e: print(e)  # except: print error
 	with open(settings_file, 'w', encoding='utf8') as file: yaml.dump(settings, file)  # save settings to settings_file
 	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
-def async_fix():
-	'fixes running `run_javascript()` "inside" `asyncio.gather`'
-	from nicegui import globals as _globals
-	_globals.index_client.content.slots['default'].__enter__()  # not quite sure what this does, but it works
 def save_to_file(works: Iterable, file: str) -> None:
 	'Saves all works in `Works.all` to file specified'
 	from json import dump

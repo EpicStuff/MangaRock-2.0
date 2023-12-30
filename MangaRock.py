@@ -57,8 +57,8 @@ class Work():
 		'''sort `cls.all` by given dict, defaults to name'''
 		works = cls.all
 		# if `works` is a dict, convert it to a list
-		if type(works) is dict:
-			works = works.values()
+		if works.__class__ is dict:
+			works = works.values()  # pylint: disable=no-member
 		# sort
 		if sort_by == 'name':
 			# for each work in `works` sort by `work.name`
@@ -73,13 +73,13 @@ class Work():
 	def asdict(self) -> dict:
 		'returns `self` as a dictionary'
 		return {**{'format': self.__class__.__name__}, **{key: val for key, val in self.__dict__.items() if val not in ([], "None", None) if key != 'lChs'}}  # convert attributes to a dictionary
-	def __iter__(self) -> object: return self  # required for to iter over for some reason
+	# def __iter__(self) -> object: return self  # required for to iter over for some reason
 	def __str__(self) -> str:
 		'returns `self` in `str` format'
 		return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'
 	def __repr__(self) -> str:
 		'represent `self` as `self.name` between <>'
-		return f'<{self.name}>'  # type: ignore
+		return f'<{self.name}>'  # pylint: disable=no-member
 class Manga(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
 class Text(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
 class Series(Work): prop = {'name': None, 'links': [], 'volume': 0, 'author': None, 'score': None, 'tags': []}
@@ -277,7 +277,7 @@ class GUI():
 		try:
 			self.library
 		except AttributeError:
-			self.library = register_library(Path(package).resolve())
+			self.library = register_library(Path(package).resolve())  # pylint: disable=attribute-defined-outside-init
 		# overwrite aggrid library with enterprise
 		grid.libraries[0] = self.library
 		# return grid
@@ -300,7 +300,7 @@ class GUI():
 				row['link'] += '‎'
 			except KeyError:  # if row is not a link
 				cols = cols[:-1]  # remove link from cols
-			row['name'] += '‏'
+			row['name'] += '‏'  # pylint: disable=bidirectional-unicode
 			# shuffle "row"s "up"
 			for col in range(len(cols)):  # for each col
 				try:
@@ -366,11 +366,12 @@ class GUI():
 		def load_file(file: str) -> list | Any:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			from json import load
-			def add_work(format: str | Work, *args, **kwargs) -> Work:
+			def add_work(_format: str | Work, *args, **kwargs) -> Work:
 				'formats `Type` argument and returns the created object'
+				from ast import literal_eval
 				# if the format is a string, turn in into an object
-				if type(format) is str:
-					format = eval(format)
+				if _format.__class__ is str:
+					_format = literal_eval(_format)
 				# return works object
 				return format(*args, **kwargs)  # type: ignore
 
@@ -387,7 +388,7 @@ class GUI():
 		try:
 			cols = cols + [{'field': key, 'rowGroup': True, 'hide': True} if val[1] == 'group' else {'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']} for key, val in self.settings['to_display'][file].items()]
 		except KeyError as e:
-			raise Exception('Columns for', e, 'has not been specified in settings.yaml')  # TODO: setup default columns instead of crash
+			raise Exception('Columns for', e, 'has not been specified in settings.yaml') from e  # TODO: setup default columns instead of crash
 		cols[-1]['resizable'] = False
 		# load works from file and refrence them in open_tabs
 		works = load_file(self.settings['json_files_dir'] + file + '.json')
@@ -476,27 +477,27 @@ class GUI():
 		'runs when a work is selected'
 		# get ending of row text and id
 		try:
-			value, id = await ui.run_javascript(f'''
+			value, _id = await ui.run_javascript(f'''
 				var node = getElement({event.sender.id}).gridOptions.api.getRowNode('{event.args['rowId']}')
 				return [node.key, node.aggData.id]
 			''')
 		except TimeoutError:
-			value, id = await ui.run_javascript(f'''
+			value, _id = await ui.run_javascript(f'''
 				var node = getElement({event.sender.id}).gridOptions.api.getRowNode('{event.args['rowId']}')
 				return [node.data.link, node.data.id]
 			''')
 		# if neither name nor link was selected, do nothing
-		if value[-1] not in {'‎', '‏'}:
+		if value[-1] not in {'‎', '‏'}:  # pylint: disable=bidirectional-unicode
 			return
 		# stuff
 		event = event.args
 		# if reading
 		if tab.reading:
 			# get work
-			work = tab.works[id[0]]
+			work = tab.works[_id[0]]
 			# if link is selected
 			if value[-1] == '‎':
-				link = work.links[id[1]]
+				link = work.links[_id[1]]
 				# if same link is reselected or previous selected is a work and link selected is first
 				if link == tab.reading or (issubclass(tab.reading.__class__, Work) and link == tab.reading.links[0]):
 					# set work's chapter the link's latest chapter
@@ -518,17 +519,17 @@ class GUI():
 				self.re_grid(tab)
 				return
 		# if not reading or diffrent work is selected
-		tab.reading = tab.works[id[0]]
+		tab.reading = tab.works[_id[0]]
 		# change label
 		tab.label.set_text('Reading: ' + tab.reading.name)
 		# if is link
 		if value[-1] == '‎':
 			# set reading to link
-			tab.reading = tab.reading.links[id[1]]
+			tab.reading = tab.reading.links[_id[1]]
 			# open link
 			await self.open_link(value)
 		# if is name
-		elif value[-1] == '‏':
+		elif value[-1] == '‏':  # pylint: disable=bidirectional-unicode
 			# open link
 			await self.open_link(tab.reading.links[0].link)
 
@@ -574,7 +575,7 @@ class GUI():
 		# if is a command
 		if event.sender.value[0] == '/':
 			# get name of open tab
-			name = self.tabs._props['model-value']
+			name = self.tabs._props['model-value']  # pylint: disable=protected-access
 			tab = self.open_tabs[name]
 			command = event.sender.value
 			# if is help command: list all commands
@@ -618,7 +619,7 @@ class GUI():
 				app.shutdown()
 		# clear input
 		event.sender.set_value(None)
-	if None:  # to fold def update_row
+	if None:  # to fold def update_row, pylint: disable=using-constant-test
 		# def update_row(self, ):
 		# 	# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
 		# 	if (new in (0, 0.0) and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
@@ -659,31 +660,30 @@ sites:  # site,         find,        with,                       then_find, and 
     manganato.com:     &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
     reaper-scans.com:  &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
     manhuaplus.com:    &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
-    mangadex.org:      &011 [div,   class: text-center,         null,      null,          -|\.,     -1,       true]
+    mangadex.org:      &011 [div,   class: text-center,         null,      null,          -|\\.,     -1,       true]
     null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]  # for aligning reasons
     www.mcreader.net:  *006
     www.mangageko.com: *006
     chapmanganato.com: *008
     readmanganato.com: *008
     # flamescans.org:  *009
-
 '''
-def main(name: str, dir: str | None = None, settings_file='settings.yaml', *args):
+def main(name: str, *args, _dir: str | None = None, settings_file='settings.yaml') -> None:  # pylint: disable=unused-argument
 	'Main function'
 	# change environmental variables
 	os.environ["MATPLOTLIB"] = "false"
 	# change working directory to where file is located unless specified otherwise, just in case
-	os.chdir(dir or os.path.dirname(os.path.realpath(__file__)))
+	os.chdir(_dir or os.path.dirname(os.path.realpath(__file__)))
 	if __debug__: print(f'working directory: {os.getcwd()}')
 	# setup gui
-	settings = load_settings(settings_file, default_settings)
+	settings = load_settings(settings_file)
 	files = [{'name': file.split('.json')[0]} for file in os.listdir(settings['json_files_dir']) if file.split('.')[-1] == 'json']
 	gui = GUI(settings, files)
 	# start gui
 	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
-def load_settings(settings_file: str, default_settings: str = default_settings) -> dict:
+def load_settings(settings_file: str, _default_settings: str = default_settings) -> dict:
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
-		with open(settings_file, 'r') as f: file = f.readlines()  # loads settings_file into file
+		with open(settings_file, 'r', encoding='utf8') as f: file = f.readlines()  # loads settings_file into file
 		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
 		col = 0; adding = set(); done = set()
 		while '  ' in file[start][14:]:
@@ -700,18 +700,18 @@ def load_settings(settings_file: str, default_settings: str = default_settings) 
 				elif line_num in adding and line[col + 1] != ' ': file[line_num] = line[0:col] + ' ' + line[col:]  # if line is in adding and next char is not ' ' then add space into line at i
 				elif line[col] == ',' or (line[col] == ':' and line[col + 1:].lstrip(' ')[0] in ('&', '*', '[')): adding.add(line_num)  # if elm endpoint is reached, add line into adding
 			col += 1  # increase column counter
-		with open(settings_file, 'w') as f: f.writelines(file)  # write file to settings_file
+		with open(settings_file, 'w', encoding='utf8') as f: f.writelines(file)  # write file to settings_file
 
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
-	settings = yaml.load(default_settings.replace('\t', ''))  # set default_settings
+	settings = yaml.load(_default_settings.replace('\t', ''))  # set default_settings
 	try: file = open(settings_file, 'r', encoding='utf8'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
 	except FileNotFoundError as e: print(e)  # except: print error
-	with open(settings_file, 'w') as file: yaml.dump(settings, file)  # save settings to settings_file
+	with open(settings_file, 'w', encoding='utf8') as file: yaml.dump(settings, file)  # save settings to settings_file
 	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
 def async_fix():
 	'fixes runing `run_javascript()` "inside" `asyncio.gather`'
-	from nicegui import globals
-	globals.index_client.content.slots['default'].__enter__()  # not quite sure what this does, but it works
+	from nicegui import globals as _globals
+	_globals.index_client.content.slots['default'].__enter__()  # not quite sure what this does, but it works
 def save_to_file(works: Iterable, file: str) -> None:
 	'Saves all works in `Works.all` to file specified'
 	from json import dump

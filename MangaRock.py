@@ -300,8 +300,35 @@ class GUI():  # pylint: disable=missing-class-docstring
 		self.panels.props(f"model-value={event.args}")
 	def generate_rowData(self, works: Iterable, rows: list, tab_name: str) -> list:  # pylint: disable=invalid-name
 		'turns list of works into list of rows that aggrid can use and group'
-		def format_rowData(row: dict, cols: dict) -> dict:  # pylint: disable=invalid-name
-			'format row to make grouping work, "shuffles" the "data" "up" if "entry" "above" is empty'
+		# for each work in works
+		for work_num, work in enumerate(works):
+			# if work format has no links or work has no links
+			if 'links' not in work.prop or work.links == []:
+				# if hide_works_with_no_links then skip this work
+				if self.settings['hide_works_with_no_links']:
+					continue
+				# else: add work to rows
+				rows.append(work.__dict__)
+				# rows[-1]['id'] = num_work  # this line may be redundant
+			else:
+				# for each link in work
+				for link_num, link in enumerate(work.links):
+					# if link has updated and has no new chapters and hide_unupdated_works
+					if link.new != '' and link.new == 0 and self.settings['hide_unupdated_works']:
+						# skip this link
+						continue
+					# process link and add it to rows
+					# tmp = work.__dict__.copy()
+					# del tmp['links']
+					rows.append({**work.__dict__, 'links': None,'link': link.link, 'nChs': link.new})
+					# rows.append({'id': (work_num, link_num), 'link': link.link, 'nChs': link.new, **tmp})
+
+
+		new_rows = []
+
+		for row in rows:
+			cols = self.settings['to_display'][tab_name]
+
 			# remove the columns that are not grouped
 			cols = dict(cols)
 			for key, val in cols.copy().items():
@@ -314,45 +341,10 @@ class GUI():  # pylint: disable=missing-class-docstring
 			except KeyError:  # if row is not a link
 				cols = cols[:-1]  # remove link from cols
 			row['name'] += '‏'  # pylint: disable=bidirectional-unicode
-			# shuffle "row"s "up"
-			'''for col in range(len(cols)):  # for each col
-				try:
-					while row[cols[col]] is None:  # while the col is empty
-						# shuffle cols "up"
-						for mod in range(col, len(cols) - 1):
-							row[cols[mod]] = row[cols[mod + 1]]
-						# set last col to empty
-						row[cols[-1]] = ' '
-				except Exception as e:  # skip row if error, i think
-					print('format_rowData error:', e)'''
-			return row
-		# for each work in works
-		for num_work, work in enumerate(works):
-			# if type of work has no links
-			if 'links' not in work.prop:
-				# add work to rows
-				rows.append(work.__dict__)
-				rows[-1]['id'] = num_work  # this line may be redundant
-			# if work has no links
-			elif work.links == []:
-				# if hide_works_with_no_links then skip this work
-				if self.settings['hide_works_with_no_links']:
-					continue
-				# else add work to rows
-				rows.append(work.__dict__)
-				rows[-1]['id'] = num_work  # this line may be redundant
-				continue
-			# for each link in work
-			for num_link, link in enumerate(work.links):
-				# if link has updated and has no new chapters and hide_unupdated_works
-				if link.new != '' and link.new == 0 and self.settings['hide_unupdated_works']:
-					# skip this link
-					continue
-				# process link and add it to rows
-				tmp = work.__dict__.copy()
-				del tmp['links']
-				rows.append({'id': (num_work, num_link), 'link': link.link, 'nChs': link.new, **tmp})
-		return [format_rowData(row, self.settings['to_display'][tab_name]) for row in rows]
+			new_rows.append(row)
+
+		return new_rows
+
 	'''def re_grid(self, tab: Dict = None, tab_name: str = None) -> None:
 		'reloads the grid of the specified tab'
 		if tab is None:

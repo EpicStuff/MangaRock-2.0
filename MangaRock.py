@@ -1,12 +1,19 @@
 # Version: 3.4.3
 import asyncio, os
+from functools import partial as wrap
+from typing import Any, Iterable
+
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
-from typing import Any, Iterable
-from functools import partial as wrap
+
+from rich.console import Console;
+from rich.traceback import install;
+
 from stuff import Dict
-from rich.console import Console; console = Console()
-from rich.traceback import install; install(width=os.get_terminal_size().columns)
+
+console = Console()
+install(width=os.get_terminal_size().columns)
+
 
 class Work():
 	''' Base Type class to be inherited by subclasses to give custom properties\n
@@ -25,9 +32,9 @@ class Work():
 			# if key of kwarg is in properties
 			if key in self.__dict__:
 				# if given val is a tuple then turn given val into a list
-				if val.__class__ is tuple: val = list(val)
+				if isinstance(val, tuple): val = list(val)
 				# if given val is list and default val is not list then unlist list
-				if val.__class__ is list and type(self.prop[key]) is not list:
+				if isinstance(val, list) and not isinstance(self.prop[key], list):
 					# if multiple items in list then raise error
 					if len(val) > 1:
 						raise TypeError('unexpected multiple values within array')
@@ -35,11 +42,11 @@ class Work():
 					else:
 						val = val[0]
 				# if default val is list and given val is not list then put given val in a list
-				elif self.prop[key].__class__ is list and val.__class__ is not list: val = [val]
+				elif isinstance(self.prop[key], list) and not isinstance(val, list): val = [val]
 				# if default val is int or float and given val is not float then float given val
-				if self.prop[key].__class__ in (int, float) and type(val) not in (int, float): val = float(val)
-				# if default val is int and given val is a decimalles (without decimals) float : convert to int
-				if val.__class__ is float and int(val) == val:
+				if isinstance(self.prop[key], (int, float)) and not isinstance(val, (int, float)): val = float(val)
+				# if default val is int and given val is a decimal-les (without decimals) float : convert to int
+				if isinstance(val, float) and int(val) == val:
 					val = int(val)
 				# change self property value to given kwarg value
 				self.__dict__.update({key: val})
@@ -48,6 +55,7 @@ class Work():
 			for num, link in enumerate(self.links):  # type: ignore
 				self.links[num] = Link(link, self)  # type: ignore
 	def update(self, what='chapter', source='links'):
+		'updates `self.{what}` based on `self.{source}`'
 		self.__dict__[what] = max([link.latest for link in self.__dict__[source] if not issubclass(link.latest.__class__, Exception)])
 		if what == 'chapter' and source == 'links':
 			for link in self.links:
@@ -67,7 +75,7 @@ class Work():
 			# for each work in `works` get `work.sort_by` and convert into number through look up table
 			works.sort(key=lambda work: look_up_table[work.__dict__[sort_by]], reverse=reverse)
 		# if `cls.all` is a dict, convert it back to a dict
-		if type(cls.all) is dict:
+		if isinstance(cls.all, dict):
 			work = {work.name: work for work in works}
 		cls.all = works
 	def asdict(self) -> dict:
@@ -80,10 +88,11 @@ class Work():
 	def __repr__(self) -> str:
 		'represent `self` as `self.name` between <>'
 		return f'<{self.name}>'  # pylint: disable=no-member
-class Manga(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
-class Text(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}
-class Series(Work): prop = {'name': None, 'links': [], 'volume': 0, 'author': None, 'score': None, 'tags': []}
+class Manga(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}  # pylint: disable=missing-class-docstring
+class Text(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}  # pylint: disable=missing-class-docstring
+class Series(Work): prop = {'name': None, 'links': [], 'volume': 0, 'author': None, 'score': None, 'tags': []}  # pylint: disable=missing-class-docstring
 class Link():
+	'link object, can be updated to get latest chapter'
 	def __init__(self, link: str, parent: Work) -> None:
 		self.site = link.split('/')[2]
 		self.link = link
@@ -97,7 +106,10 @@ class Link():
 			-999.3 = rendering error, probably timeout
 			-999.4 = parsing error
 			-999.5 = whatever was extracted was not a number'''
-		import re, bs4
+		import re
+
+		import bs4
+
 		# if site is supported
 		if self.site not in sites:
 			self.latest = Exception('site not supported')  # site not supported
@@ -205,11 +217,12 @@ class Link():
 		self.new = new
 		return new
 	def asdict(self):
+		'convert `self` to a string'
 		return self.link
 	def __repr__(self) -> str:
 		'represent `self` as `self.link` between <>'
 		return f'<{self.link}>'  # type: ignore
-class GUI():
+class GUI():  # pylint: disable=missing-class-docstring
 	def __init__(self, settings: dict, files: list[dict[str, str]]) -> None:
 		# setup vars
 		self.settings = settings
@@ -222,7 +235,7 @@ class GUI():
 			# create main panel
 			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
 				ui.label('Choose File: ')
-				gridOptions = {
+				gridOptions = {  # pylint: disable=invalid-name
 					'defaultColDef': {
 						'resizable': True,
 						'suppressMenu': True,
@@ -248,7 +261,7 @@ class GUI():
 		pass
 	def _debug(self):
 		'opens debug tab'
-		# if debug tab is allready open, switch to it
+		# if debug tab is already open, switch to it
 		if 'debug' in self.open_tabs:
 			self.switch_tab(Dict({'args': 'Debug'}))
 			return
@@ -266,9 +279,11 @@ class GUI():
 		self.switch_tab(Dict({'args': 'Debug'}))
 	def jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
 		'upgrade aggrid from community to enterprise'
-		from nicegui.dependencies import register_library
 		from pathlib import Path
-		# if allready jailbroken, return grid
+
+		from nicegui.dependencies import register_library
+
+		# if already jailbroken, return grid
 		if grid.libraries[0].name == 'ag-grid-enterprise':
 			return grid
 		# check if targeted library is ag-grid-community
@@ -283,11 +298,12 @@ class GUI():
 		# return grid
 		return grid
 	def switch_tab(self, event: GenericEventArguments | Dict) -> None:
+		'switch to tab indicated by event'
 		self.tabs.props(f"model-value={event.args}")
 		self.panels.props(f"model-value={event.args}")
-	def generate_rowData(self, works: Iterable, rows: list, tab_name: str) -> list:
+	def generate_rowData(self, works: Iterable, rows: list, tab_name: str) -> list:  # pylint: disable=invalid-name
 		'turns list of works into list of rows that aggrid can use and group'
-		def format_rowData(row: dict, cols: dict) -> dict:
+		def format_rowData(row: dict, cols: dict) -> dict:  # pylint: disable=invalid-name
 			'format row to make grouping work, "shuffles" the "data" "up" if "entry" "above" is empty'
 			# remove the columns that are not grouped
 			cols = dict(cols)
@@ -369,6 +385,7 @@ class GUI():
 			def add_work(_format: str | Work, *args, **kwargs) -> Work:
 				'formats `Type` argument and returns the created object'
 				from ast import literal_eval
+
 				# if the format is a string, turn in into an object
 				if _format.__class__ is str:
 					_format = literal_eval(_format)
@@ -379,7 +396,7 @@ class GUI():
 				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
 		# extract file name from event
 		file = event.args['data']['name']
-		# if file allready open, switch to it
+		# if file already open, switch to it
 		if file in self.open_tabs:
 			self.switch_tab(Dict({'args': file}))
 			return
@@ -390,7 +407,7 @@ class GUI():
 		except KeyError as e:
 			raise Exception('Columns for', e, 'has not been specified in settings.yaml') from e  # TODO: setup default columns instead of crash
 		cols[-1]['resizable'] = False
-		# load works from file and refrence them in open_tabs
+		# load works from file and reference them in open_tabs
 		works = load_file(self.settings['json_files_dir'] + file + '.json')
 		tab = self.open_tabs[file] = Dict({'name': file, 'works': works, 'links': {}})
 		tab.reading = None
@@ -411,7 +428,7 @@ class GUI():
 		with self.panels:
 			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)') as tab.panel:
 				tab.label = ui.label('Reading: ')
-				gridOptions = {
+				gridOptions = {  # pylint: disable=invalid-name
 					'defaultColDef': {
 						'resizable': True,
 						'suppressMenu': True,
@@ -457,7 +474,7 @@ class GUI():
 		elif await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").parent.id') in tab.open:
 			pass
 			# TODO: make this work to "advanced grouped rows", opening a sub row does not close the other opened sub rows of the same parent
-		# if event was caused by (assumidly) closing the opened row, take note of it and `return`
+		# if event was caused by (assumedly) closing the opened row, take note of it and `return`
 		elif tab_opened in tab.open:
 			tab.open.remove(tab_opened)
 			return
@@ -518,7 +535,7 @@ class GUI():
 				# update grid
 				self.re_grid(tab)
 				return
-		# if not reading or diffrent work is selected
+		# if not reading or different work is selected
 		tab.reading = tab.works[_id[0]]
 		# change label
 		tab.label.set_text('Reading: ' + tab.reading.name)
@@ -541,6 +558,7 @@ class GUI():
 			# 	self.update_grid(tab.grid, self.generate_rowData(tab.works, []))
 			# 	return
 	async def open_link(self, link: str) -> None:
+		'opens link provided in new tab'
 		await ui.run_javascript(f"window.open('{link}')", respond=False)
 	async def update_all(self, tab: Dict) -> None:
 		'updates all works provided'
@@ -572,6 +590,7 @@ class GUI():
 			await tab.tasks
 		print('done updating', tab.name)
 	async def handle_input(self, event: GenericEventArguments):
+		'handles input from input box'
 		# if is a command
 		if event.sender.value[0] == '/':
 			# get name of open tab
@@ -629,6 +648,7 @@ class GUI():
 		pass
 
 
+# pylint: disable-next=invalid-name
 default_settings = '''
 dark_mode: true  # default: true
 json_files_dir: ./  # default: ./
@@ -637,14 +657,14 @@ font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
 default_column_width: 16  # default: 16
 row_height: 32  # default: 32
 disable_col_dragging: true  # default: true
-to_display:  # culumns to display for each Type, do not include name (it's required and auto included)
+to_display:  # columns to display for each Type, do not include name (it's required and auto included)
     example: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
-workers: 3  # defualt: 3
+workers: 3  # default: 3
 renderers: 1  # default: 1
 hide_unupdated_works: true  # default: true
 hide_works_with_no_links: true  # default: true
 hide_updates_with_errors: false  # default: false
-sort_by: score  # defulat: score, score is currently only working option
+sort_by: score  # default: score, score is currently only working option
 # prettier-ignore
 scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
 sites_ignore: []
@@ -682,6 +702,7 @@ def main(name: str, *args, _dir: str | None = None, settings_file='settings.yaml
 	# start gui
 	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
 def load_settings(settings_file: str, _default_settings: str = default_settings) -> dict:
+	'load and return settings from indicated file, overwriting default settings'
 	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
 		with open(settings_file, 'r', encoding='utf8') as f: file = f.readlines()  # loads settings_file into file
 		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
@@ -709,7 +730,7 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 	with open(settings_file, 'w', encoding='utf8') as file: yaml.dump(settings, file)  # save settings to settings_file
 	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
 def async_fix():
-	'fixes runing `run_javascript()` "inside" `asyncio.gather`'
+	'fixes running `run_javascript()` "inside" `asyncio.gather`'
 	from nicegui import globals as _globals
 	_globals.index_client.content.slots['default'].__enter__()  # not quite sure what this does, but it works
 def save_to_file(works: Iterable, file: str) -> None:

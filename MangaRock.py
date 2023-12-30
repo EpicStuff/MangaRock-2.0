@@ -1,4 +1,4 @@
-# Version: 3.4.3
+# Version: 3.5.0
 import asyncio, os
 from functools import partial as wrap
 from typing import Any, Iterable
@@ -95,6 +95,7 @@ class Link():
 		self.link = link
 		self.parent = parent
 		self.new = self.latest = ''
+		self.index = {}
 	async def update(self, renderers: asyncio.Semaphore, sites: dict, tags_to_skip: list, async_session) -> float | Exception:
 		'''Finds latest chapter from `self.link` then sets result or an error code to `self.latest`
 		# Error Codes:
@@ -298,59 +299,6 @@ class GUI():  # pylint: disable=missing-class-docstring
 		'switch to tab indicated by event'
 		self.tabs.props(f"model-value={event.args}")
 		self.panels.props(f"model-value={event.args}")
-	def generate_rowData(self, works: Iterable) -> list:  # pylint: disable=invalid-name
-		'turns list of works into list of rows that aggrid can use and group'
-		rows = []
-		# for each work in works
-		for work in works:
-			# if work format has no links or work has no links
-			if 'links' not in work.prop or work.links == []:
-				# if hide_works_with_no_links then skip this work
-				if self.settings['hide_works_with_no_links']:
-					continue
-				# else: add work to rows
-				rows.append(work.__dict__)  # TODO: do the shuffle up thing but down for works with no links
-			else:
-				# for each link in work
-				for link in work.links:
-					# if link has updated and has no new chapters and hide_unupdated_works
-					if link.new != '' and link.new == 0 and self.settings['hide_unupdated_works']:
-						# skip this link
-						continue
-					# process link and add it to rows
-					rows.append({**work.__dict__, 'links': None, 'link': link.link, 'nChs': link.new})
-
-		############################
-		# Options:
-		#  1. generate rowdata into a dict then convert dict into list, reconvert each time rowdata is updated
-		#  3. index though rowdata to update rowdata
-
-		new_rows = []
-
-		for row in rows:
-			# cols = dict(self.settings['to_display'][tab_name])
-
-			# # remove the columns that are not grouped
-			# for key, val in cols.copy().items():
-			# 	if val[1] != 'group':
-			# 		del cols[key]
-			# cols = list(cols.keys()) + ['link']
-			# add link, name identifiers
-			# try:
-			# 	row['link'] += '‎'
-			# except KeyError:  # if row is not a link
-			# 	# cols = cols[:-1]  # remove link from cols
-			# 	pass
-			# row['name'] += '‏'  # pylint: disable=bidirectional-unicode
-			new_rows.append(row)
-
-		return new_rows
-
-	'''def re_grid(self, tab: Dict = None, tab_name: str = None) -> None:
-		'reloads the grid of the specified tab'
-		if tab is None:
-			tab = self.open_tabs[tab_name]
-		tab.grid.run_grid_method('setGridOption', ('rowData', self.generate_rowData(tab.works, [], tab.name)))'''
 	def close_tab(self, tab_name: str) -> None:
 		'closes indicated tab'
 		# get tab
@@ -363,10 +311,6 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# switch to main tab
 		del self.open_tabs[tab_name]
 		self.switch_tab(Dict({'args': 'Main'}))
-	'''def _on_reload(self):
-		for tab_name in self.open_tabs:
-			if tab_name not in {'Main', 'Debug'}:
-				self.re_grid(tab_name=tab_name)'''
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
@@ -386,39 +330,70 @@ class GUI():  # pylint: disable=missing-class-docstring
 
 			with open(file, 'r', encoding='utf8') as f:
 				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
+		def generate_rowData(works: Iterable, tab_name: str) -> list:  # pylint: disable=invalid-name
+			'turns list of works into list of rows that aggrid can use and group'  # TODO: turn into generator instead
+			rows = []
+			# for each work in works
+			for work in works:
+				# if work format has no links or work has no links
+				if 'links' not in work.prop or work.links == []:
+					# add work to rows with isVisible set to 0 if hide_works_with_no_links is true else 1
+					work.index[tab_name] = len(rows)  # unnecessary
+					rows.append({**work.__dict__, 'isVisible': 0 if self.settings['hide_works_with_no_links'] else 1})  # TODO: do the shuffle up thing but down for works with no links
+				else:
+					# for each link in work
+					for link in work.links:
+						# if link has updated and has no new chapters and hide_unupdated_works
+						if link.new != '' and link.new == 0 and self.settings['hide_unupdated_works']:
+							# skip this link
+							continue
+						# process link and add it to rows
+						link.index[tab_name] = len(rows)
+						rows.append({**work.__dict__, 'links': None, 'link': link.link, 'nChs': link.new, 'isVisible': 1})
+			return rows
+			# new_rows = []
+
+			# for row in rows:
+			# 	# cols = dict(self.settings['to_display'][tab_name])
+
+			# 	# # remove the columns that are not grouped
+			# 	# for key, val in cols.copy().items():
+			# 	# 	if val[1] != 'group':
+			# 	# 		del cols[key]
+			# 	# cols = list(cols.keys()) + ['link']
+			# 	# add link, name identifiers
+			# 	# try:
+			# 	# 	row['link'] += '‎'
+			# 	# except KeyError:  # if row is not a link
+			# 	# 	# cols = cols[:-1]  # remove link from cols
+			# 	# 	pass
+			# 	# row['name'] += '‏'  # pylint: disable=bidirectional-unicode
+			# 	new_rows.append(row)
+
+			# return new_rows
 		# extract file name from event
-		file = event.args['data']['name']
+		tab_name = event.args['data']['name']
 		# if file already open, switch to it
-		if file in self.open_tabs:
-			self.switch_tab(Dict({'args': file}))
+		if tab_name in self.open_tabs:
+			self.switch_tab(Dict({'args': tab_name}))
 			return
 		# get columns to display
-		cols = [{'field': 'id', 'aggFunc': 'first', 'hide': True}]
-		try:
-			cols = cols + [{'field': key, 'rowGroup': True, 'hide': True} if val[1] == 'group' else {'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']} for key, val in self.settings['to_display'][file].items()]
-		except KeyError as e:
-			raise Exception('Columns for', e, 'has not been specified in settings.yaml') from e  # TODO: setup default columns instead of crash
+		assert tab_name in self.settings['to_display'], 'Columns for ' + tab_name + ' has not been specified in settings.yaml'  # make sure columns for file has been specified in settings, TODO: do something instead of crash
+		cols = [{'field': 'isVisible', 'aggFunc': 'max', 'hide': True}]
+		cols += [{'field': key, 'rowGroup': True, 'hide': True} if val[1] == 'group' else {'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']} for key, val in self.settings['to_display'][tab_name].items()]  # convert into aggrid cols forma
 		cols[-1]['resizable'] = False
 		# load works from file and reference them in open_tabs
-		works = load_file(self.settings['json_files_dir'] + file + '.json')
-		tab = self.open_tabs[file] = Dict({'name': file, 'works': works, 'links': {}})
-		tab.reading = None
-		tab.open = set()
-		'''# create links dict with "index" of link
-		num = 0
-		for work in works:
-			for link in work.links:
-				tab.links[link.link] = num
-				num += 1'''
+		works = load_file(self.settings['json_files_dir'] + tab_name + '.json')
+		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': works, 'links': {}, 'reading': None, 'open': set()})
 		# generate rowData
-		tab.rows = self.generate_rowData(works)
+		tab.rows = generate_rowData(works, tab_name)
 		# create and switch to tab for file
 		with self.tabs:
-			tab.tab = ui.tab(file)
-		self.switch_tab(Dict({'args': file}))
+			tab.tab = ui.tab(tab_name)
+		self.switch_tab(Dict({'args': tab_name}))
 		# create panel for file
 		with self.panels:
-			with ui.tab_panel(file).style('height: calc(100vh - 84px); width: calc(100vw - 32px)') as tab.panel:
+			with ui.tab_panel(tab_name).style('height: calc(100vh - 84px); width: calc(100vw - 32px)') as tab.panel:
 				tab.label = ui.label('Reading: ')
 				gridOptions = {  # pylint: disable=invalid-name
 					'defaultColDef': {
@@ -434,11 +409,12 @@ class GUI():  # pylint: disable=missing-class-docstring
 					'columnDefs': cols,
 					'rowData': tab.rows,
 					'rowHeight': self.settings['row_height'],
-					# ':getRowHeight': 'params => params.data.nChs < 0 ? 5 : 25',  # TODO: tmp
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
 					'groupAllowUnbalanced': True,
-					':getRowId': 'params => params.data.link'
+					':getRowId': 'params => params.data.link',
+					':isExternalFilterPresent': '() => true',
+					':doesExternalFilterPass': 'params => params.data.isVisible',
 				}
 				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)'))
 				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
@@ -558,7 +534,6 @@ class GUI():  # pylint: disable=missing-class-docstring
 	async def update_all(self, tab: Dict) -> None:
 		'updates all works provided'
 		from requests_html2 import AsyncHTMLSession
-
 		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
 			try:
 				if 'links' in work.prop:
@@ -570,15 +545,19 @@ class GUI():  # pylint: disable=missing-class-docstring
 							new = await link.update(self.renderers, self.settings['sites'], self.settings['tags_to_skip'], async_session)
 							# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
 							if (new == 0 and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
+								# update "server side" data
+								tab.rows[link.index[tab.name]]['isVisible'] = 0
+								# update "client side" data
 								with tab.grid:
 									ui.run_javascript(f'''
 										var grid = getElement({tab.grid.id}).gridOptions.api;
 										var node = grid.getRowNode('{link.link}').data
-										grid.applyTransaction({{remove: [node]}})
+										node.isVisible = 0;
+										grid.applyTransaction({{update: [node]}})
 									''')
 							else:
 								# # update "server side" data
-								# tab.rows[tab.links[link.link]]['nChs'] = new
+								tab.rows[link.index[tab.name]]['nChs'] = new
 								# update "client side" data
 								with tab.grid:
 									ui.run_javascript(f'''

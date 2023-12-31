@@ -1,4 +1,4 @@
-# Version: 3.5.0
+# Version: 3.5.1
 import asyncio, os
 from functools import partial as wrap
 from typing import Any, Iterable
@@ -228,7 +228,8 @@ class GUI():  # pylint: disable=missing-class-docstring
 		self.open_tabs = Dict({'Main': Dict({'name': 'Main'})})
 		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/save': 'save all works in tab', '/reupdate': 'reupdate all works in tab', '/reload': 'close and reopen tab (without saving)', '/refresh': 'redraw table, Deprecated: just reload instead', '/close': 'close current tab (without saving)', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
 		# create tab holder with main tab
-		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs: tab = ui.tab('Main')
+		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs:
+			tab = ui.tab('Main')
 		# create panel holder
 		with ui.tab_panels(self.tabs, value=tab) as self.panels:
 			# create main panel
@@ -249,15 +250,16 @@ class GUI():  # pylint: disable=missing-class-docstring
 				with ui.row().classes('w-full'):
 					self._input()
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
+		# create help popup
+		with ui.dialog() as self.help_popup, ui.card():  # TODO: get rid of card round corners
+			ui.code('\n'.join([f"{key}: {val}" for key, val in self.commands.items()]), language='yaml')  # TODO: get rid of round corners
+			ui.button('Close', on_click=self.help_popup.close)
 		# setup semaphores for `update_all()`
 		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
 		# css stuff and stuff
 		ui.query('div').style('gap: 0')
-		'app.on_connect(self._on_reload)'
 	def _input(self) -> ui.input:
 		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self.handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
-	def _main(self) -> None:
-		pass
 	def _debug(self) -> None:
 		'opens debug tab'
 		# if debug tab is already open, switch to it
@@ -434,19 +436,6 @@ class GUI():  # pylint: disable=missing-class-docstring
 	async def close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: add more comments
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
-		"""# if the row being opened is "empty"
-		if await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").childrenAfterSort[0].key') in {None, ' '}:
-			# if not (the child of the row being opened has "valid" data instead of key)
-			if not await ui.run_javascript(f'''
-				var child = getElement({event.sender.id}).gridOptions.api.getRowNode('{tab_opened}').childrenAfterSort[0]
-				return ('data' in child) && (child.data.link != ' ')
-			'''):
-				# close the row being opened
-				await ui.run_javascript(f'''
-					var grid = getElement({event.sender.id}).gridOptions.api;
-					grid.setRowNodeExpanded(grid.getRowNode("{tab_opened}"), false);
-				''', respond=False)
-				return"""
 		# if the row being opened is a child of the currently opened row, do nothing
 		if await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").parent.id') in tab.open:
 			pass
@@ -558,7 +547,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			command = event.sender.value
 			# if is help command: list all commands
 			if command == '/help':
-				print([f"{key}: {val}" for key, val in self.commands.items()])
+				self.help_popup.open()
 			# if is debug command: open debug tab
 			elif command == '/debug':
 				self._debug()
@@ -572,8 +561,8 @@ class GUI():  # pylint: disable=missing-class-docstring
 			# if is reload: re load file
 			elif command == '/reload':
 				if name == 'Main':
-					files = [{'name': file.split('.json')[0]} for file in os.listdir(self.settings['json_files_dir']) if file.split('.')[-1] == 'json']
-					tab.grid.run_grid_method('setGridOption', ('rowData', files))
+					self.open_tabs.Main.grid.options['rowData'] = get_files(self.settings)
+					self.open_tabs.Main.grid.update()
 				else:
 					self.close_tab(name)
 					await self._file_opened(Dict({'args': {'data': {'name': name}}}))
@@ -652,8 +641,7 @@ def main(name: str, *args, _dir: str | None = None, settings_file='settings.yaml
 	if __debug__: print(f'working directory: {os.getcwd()}')
 	# setup gui
 	settings = load_settings(settings_file)
-	files = [{'name': file.split('.json')[0]} for file in os.listdir(settings['json_files_dir']) if file.split('.')[-1] == 'json']
-	gui = GUI(settings, files)
+	gui = GUI(settings, get_files(settings))
 	# start gui
 	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
 def load_settings(settings_file: str, _default_settings: str = default_settings) -> dict:
@@ -684,6 +672,9 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 	except FileNotFoundError as e: print(e)  # except: print error
 	with open(settings_file, 'w', encoding='utf8') as file: yaml.dump(settings, file)  # save settings to settings_file
 	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
+def get_files(settings) -> list[dict[str, Any]]:
+	'returns list of files in json_files_dir that ends with .json'
+	return [{'name': file.split('.json')[0]} for file in os.listdir(settings['json_files_dir']) if file.split('.')[-1] == 'json']
 def save_to_file(works: Iterable, file: str) -> None:
 	'Saves all works in `Works.all` to file specified'
 	from json import dump

@@ -207,6 +207,7 @@ class Link():
 		return self.re()
 	def re(self, new: int | float = None) -> int | float:
 		'updates `self.new` from `new` arg or calculates if not provided, then returns `self.new`'
+		# why this function is called re? I have no idea
 		if new is None:
 			if not issubclass(self.latest.__class__, Exception):
 				new = round(self.latest - self.parent.chapter, 4)
@@ -257,7 +258,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self.handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 	def _main(self) -> None:
 		pass
-	def _debug(self):
+	def _debug(self) -> None:
 		'opens debug tab'
 		# if debug tab is already open, switch to it
 		if 'debug' in self.open_tabs:
@@ -311,6 +312,45 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# switch to main tab
 		del self.open_tabs[tab_name]
 		self.switch_tab(Dict({'args': 'Main'}))
+	def update_row(self, tab: Dict, link: Link, current_chapter: float = None, new_chapters: float = None) -> None:
+		'updates row with new chapter count'
+		# update "server side" data
+		row = tab.rows[link.index[tab.name]]
+		if current_chapter: row['chapter'] = current_chapter
+		if new_chapters: row['nChs'] = new_chapters
+		# code to update "client side" data
+		js = f'''
+				var grid = getElement({tab.grid.id}).gridOptions.api;
+				var node = grid.getRowNode('{link.link}').data
+			'''
+		if current_chapter: js += f'node.chapter = {current_chapter};'
+		# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
+		if (new_chapters == 0 and self.settings['hide_unupdated_works']) or (int(new_chapters) == -999 and self.settings['hide_updates_with_errors']):
+			# update "server side" data
+			tab.rows[link.index[tab.name]]['isVisible'] = 0
+			# code to update "client side" data
+			js = f'''
+				var grid = getElement({tab.grid.id}).gridOptions.api;
+				var node = grid.getRowNode('{link.link}').data
+				node.nChs = {new_chapters};
+				node.isVisible = 0;
+				grid.applyTransaction({{update: [node]}})
+			'''
+		else:
+			# update "server side" data
+			tab.rows[link.index[tab.name]]['isVisible'] = 1
+			# update "client side" data
+			with tab.grid:
+				ui.run_javascript(f'''
+					var grid = getElement({tab.grid.id}).gridOptions.api;
+					var node = grid.getRowNode('{link.link}').data;
+					node.nChs = {new_chapters};
+					node.isVisible = 1;
+					grid.applyTransaction({{update: [node]}});
+				''')
+
+		with tab.grid:
+			ui.run_javascript()
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
@@ -330,16 +370,17 @@ class GUI():  # pylint: disable=missing-class-docstring
 
 			with open(file, 'r', encoding='utf8') as f:
 				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
-		def generate_rowData(works: Iterable, tab_name: str) -> list:  # pylint: disable=invalid-name
+		def generate_rowData(works: Iterable, tab: Dict) -> list:  # pylint: disable=invalid-name
 			'turns list of works into list of rows that aggrid can use and group'  # TODO: turn into generator instead
-			rows = []
+			index = 0
 			# for each work in works
 			for work in works:
 				# if work format has no links or work has no links
 				if 'links' not in work.prop or work.links == []:
 					# add work to rows with isVisible set to 0 if hide_works_with_no_links is true else 1
-					work.index[tab_name] = len(rows)  # unnecessary
-					rows.append({**work.__dict__, 'isVisible': 0 if self.settings['hide_works_with_no_links'] else 1})  # TODO: do the shuffle up thing but down for works with no links
+					work.index[tab.name] = index  # unnecessary
+					index += 1
+					yield {**work.__dict__, 'isVisible': 0 if self.settings['hide_works_with_no_links'] else 1}  # TODO: do the shuffle up thing but down for works with no links
 				else:
 					# for each link in work
 					for link in work.links:
@@ -348,29 +389,10 @@ class GUI():  # pylint: disable=missing-class-docstring
 							# skip this link
 							continue
 						# process link and add it to rows
-						link.index[tab_name] = len(rows)
-						rows.append({**work.__dict__, 'links': None, 'link': link.link, 'nChs': link.new, 'isVisible': 1})
-			return rows
-			# new_rows = []
-
-			# for row in rows:
-			# 	# cols = dict(self.settings['to_display'][tab_name])
-
-			# 	# # remove the columns that are not grouped
-			# 	# for key, val in cols.copy().items():
-			# 	# 	if val[1] != 'group':
-			# 	# 		del cols[key]
-			# 	# cols = list(cols.keys()) + ['link']
-			# 	# add link, name identifiers
-			# 	# try:
-			# 	# 	row['link'] += '‎'
-			# 	# except KeyError:  # if row is not a link
-			# 	# 	# cols = cols[:-1]  # remove link from cols
-			# 	# 	pass
-			# 	# row['name'] += '‏'  # pylint: disable=bidirectional-unicode
-			# 	new_rows.append(row)
-
-			# return new_rows
+						link.index[tab.name] = index
+						index += 1
+						tab.links[link.link] = link
+						yield {**work.__dict__, 'links': None, 'link': link.link, 'nChs': link.new, 'isVisible': 1}
 		# extract file name from event
 		tab_name = event.args['data']['name']
 		# if file already open, switch to it
@@ -384,9 +406,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 		cols[-1]['resizable'] = False
 		# load works from file and reference them in open_tabs
 		works = load_file(self.settings['json_files_dir'] + tab_name + '.json')
-		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': works, 'links': {}, 'reading': None, 'open': set()})
+		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': {work.name: work for work in works}, 'links': {}, 'reading': None, 'open': set()})
 		# generate rowData
-		tab.rows = generate_rowData(works, tab_name)
+		tab.rows = list(generate_rowData(works, tab_name))
 		# create and switch to tab for file
 		with self.tabs:
 			tab.tab = ui.tab(tab_name)
@@ -425,7 +447,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# update all works
 		await asyncio.sleep(1)
 		await self.update_all(tab)
-	async def close_all_other(self, tab: Dict, event: GenericEventArguments):  # TODO: add more comments
+	async def close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: add more comments
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
 		# if the row being opened is "empty"
@@ -461,39 +483,55 @@ class GUI():  # pylint: disable=missing-class-docstring
 				''', respond=False)
 		# set open to new opened row
 		tab.open.add(tab_opened)
-	async def work_selected(self, tab: Dict, event: GenericEventArguments):  # TODO: add comments
+	async def open_link(self, link: str) -> None:
+		'opens link provided in new tab'
+		await ui.run_javascript(f"window.open('{link}')", respond=False)
+	async def update_all(self, tab: Dict) -> None:
+		'updates all works provided'
+		from requests_html2 import AsyncHTMLSession
+		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
+			try:
+				if 'links' in work.prop:
+					for link in work.links:  # type: ignore
+						async with self.workers:
+							# if debug tab open
+							if 'debug' in self.open_tabs:
+								self.open_tabs.debug.updating.add_rows({'name': link.link})
+							# update link and row
+							self.update_row(tab, link, await link.update(self.renderers, self.settings['sites'], self.settings['tags_to_skip'], async_session))
+							# if debug tab open
+							if 'debug' in self.open_tabs:
+								self.open_tabs.debug.updating.remove_rows({'name': link.link})
+								self.open_tabs.debug.done.add_rows({'name': link.link})
+			except asyncio.CancelledError as e:
+				print(e)  # TODO: if debug tab open, remove work from 'updating' column/card
+
+		async with AsyncHTMLSession() as async_session:
+			tab.tasks = asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works.values()], return_exceptions=True)
+			await tab.tasks
+		print('done updating', tab.name)
+	async def work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: add comments
 		'runs when a work is selected'
-		# get ending of row text and id
-		try:
-			value, _id = await ui.run_javascript(f'''
-				var node = getElement({event.sender.id}).gridOptions.api.getRowNode('{event.args['rowId']}')
-				return [node.key, node.aggData.id]
-			''')
-		except TimeoutError:
-			value, _id = await ui.run_javascript(f'''
-				var node = getElement({event.sender.id}).gridOptions.api.getRowNode('{event.args['rowId']}')
-				return [node.data.link, node.data.id]
-			''')
-		# if neither name nor link was selected, do nothing
-		if value[-1] not in {'‎', '‏'}:  # pylint: disable=bidirectional-unicode
-			return
-		# stuff
 		event = event.args
+		# if neither work nor link was selected (not series, author, etc.), do nothing
+		if not event.rowId.startswith('row-group-name-') or not event.rowId.startswith('https://'): return
 		# if reading
 		if tab.reading:
-			# get work
-			work = tab.works[_id[0]]
-			# if link is selected
-			if value[-1] == '‎':
-				link = work.links[_id[1]]
+			# if link was selected
+			if event.rowId.startswith('https://'):
+				# get link
+				link = tab.links[event.value]
 				# if same link is reselected or previous selected is a work and link selected is first
-				if link == tab.reading or (issubclass(tab.reading.__class__, Work) and link == tab.reading.links[0]):
+				if link == tab.reading or (issubclass(tab.reading, Work) and link == tab.reading.links[0]):
 					# set work's chapter the link's latest chapter
+					work = link.parent
 					work.chapter = link.latest
 					# TODO: deal with the case that the link has not been updated yet
 					tab.reading = None
 			# if name is selected
 			else:
+				# get work
+				work = tab.works[event.value]
 				# if same work is reselected or work selected is parent of reading link
 				if work == tab.reading or tab.reading in work.links:
 					# set work's chapter to latest chapter
@@ -504,7 +542,12 @@ class GUI():  # pylint: disable=missing-class-docstring
 				# change label
 				tab.label.set_text('Reading:')
 				# update grid
-				self.re_grid(tab)
+				for link in work.links:  # for each link in work that has been affected
+					# update "server side" data
+					row = tab.rows[link.index[tab.name]]
+					row['chapter'] = work.chapter
+					self.update_row(tab, link, link.re())
+
 				return
 		# if not reading or different work is selected
 		tab.reading = tab.works[_id[0]]
@@ -528,56 +571,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			# 	tab.reading = None
 			# 	self.update_grid(tab.grid, self.generate_rowData(tab.works, []))
 			# 	return
-	async def open_link(self, link: str) -> None:
-		'opens link provided in new tab'
-		await ui.run_javascript(f"window.open('{link}')", respond=False)
-	async def update_all(self, tab: Dict) -> None:
-		'updates all works provided'
-		from requests_html2 import AsyncHTMLSession
-		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
-			try:
-				if 'links' in work.prop:
-					for link in work.links:  # type: ignore
-						async with self.workers:
-							# if debug tab open
-							if 'debug' in self.open_tabs:
-								self.open_tabs.debug.updating.add_rows({'name': link.link})
-							new = await link.update(self.renderers, self.settings['sites'], self.settings['tags_to_skip'], async_session)
-							# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
-							if (new == 0 and self.settings['hide_unupdated_works']) or (int(new) == -999 and self.settings['hide_updates_with_errors']):
-								# update "server side" data
-								tab.rows[link.index[tab.name]]['isVisible'] = 0
-								# update "client side" data
-								with tab.grid:
-									ui.run_javascript(f'''
-										var grid = getElement({tab.grid.id}).gridOptions.api;
-										var node = grid.getRowNode('{link.link}').data
-										node.isVisible = 0;
-										grid.applyTransaction({{update: [node]}})
-									''')
-							else:
-								# # update "server side" data
-								tab.rows[link.index[tab.name]]['nChs'] = new
-								# update "client side" data
-								with tab.grid:
-									ui.run_javascript(f'''
-										var grid = getElement({tab.grid.id}).gridOptions.api;
-										var node = grid.getRowNode('{link.link}').data;
-										node.nChs = {new};
-										grid.applyTransaction({{update: [node]}});
-									''')
-							# if debug tab open
-							if 'debug' in self.open_tabs:
-								self.open_tabs.debug.updating.remove_rows({'name': link.link})
-								self.open_tabs.debug.done.add_rows({'name': link.link})
-			except asyncio.CancelledError as e:
-				print(e)  # TODO: if debug tab open, remove work from 'updating' column/card
-
-		async with AsyncHTMLSession() as async_session:
-			tab.tasks = asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works], return_exceptions=True)
-			await tab.tasks
-		print('done updating', tab.name)
-	async def handle_input(self, event: GenericEventArguments):
+	async def handle_input(self, event: GenericEventArguments) -> None:
 		'handles input from input box'
 		# if input is empty, do nothing
 		if event.sender.value == '':
@@ -611,13 +605,13 @@ class GUI():  # pylint: disable=missing-class-docstring
 					await self._file_opened(Dict({'args': {'data': {'name': name}}}))
 			# if is save or exit command: save all works in tab and
 			elif command == '/save' and name != 'Main':
-				save_to_file(tab.works, self.settings['json_files_dir'] + name + '.json')
+				save_to_file(tab.works.values(), self.settings['json_files_dir'] + name + '.json')
 				ui.notify('Saved ' + name)
 			elif command == '/exit':
 				# save all open tabs
 				for name, tab in self.open_tabs.items():
 					if name != 'Main':
-						save_to_file(tab.works, self.settings['json_files_dir'] + name + '.json')
+						save_to_file(tab.works.values(), self.settings['json_files_dir'] + name + '.json')
 						ui.notify('Saved ' + name)
 				# close app
 				app.shutdown()
@@ -628,7 +622,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			elif command == '/quit':
 				app.shutdown()
 			elif command == '/test':
-				del tab.rows[1]
+				pass
 			else:
 				pass  # TODO: do the eval thing
 		# clear input

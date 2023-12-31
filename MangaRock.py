@@ -312,45 +312,29 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# switch to main tab
 		del self.open_tabs[tab_name]
 		self.switch_tab(Dict({'args': 'Main'}))
-	def update_row(self, tab: Dict, link: Link, current_chapter: float = None, new_chapters: float = None) -> None:
+	def update_row(self, tab: Dict, link: Link, new_chapters: float = None, current_chapter: float = None) -> None:
 		'updates row with new chapter count'
-		# update "server side" data
 		row = tab.rows[link.index[tab.name]]
-		if current_chapter: row['chapter'] = current_chapter
-		if new_chapters: row['nChs'] = new_chapters
+		# update "server side" data
+		if new_chapters is not None:  # if new_chapter was provided
+			row['nChs'] = new_chapters
+			# determine visibility
+			row['isVisible'] = int(not (
+				new_chapters == 0 and self.settings['hide_unupdated_works'] or  # hide if no new chapters and hide_unupdated_works or
+				int(new_chapters) == -999 and self.settings['hide_updates_with_errors']  # hide if new_chapters is error and hide_updates_with_errors
+			))
+		if current_chapter is not None: row['chapter'] = current_chapter  # if current chapter was provided
 		# code to update "client side" data
 		js = f'''
 				var grid = getElement({tab.grid.id}).gridOptions.api;
-				var node = grid.getRowNode('{link.link}').data
+				var node = grid.getRowNode('{link.link}').data;
+				node.isVisible = {row['isVisible']};
 			'''
-		if current_chapter: js += f'node.chapter = {current_chapter};'
-		# if no new chapters and hide_unupdated_works or update resulted in error and hide_updates_with_errors
-		if (new_chapters == 0 and self.settings['hide_unupdated_works']) or (int(new_chapters) == -999 and self.settings['hide_updates_with_errors']):
-			# update "server side" data
-			tab.rows[link.index[tab.name]]['isVisible'] = 0
-			# code to update "client side" data
-			js = f'''
-				var grid = getElement({tab.grid.id}).gridOptions.api;
-				var node = grid.getRowNode('{link.link}').data
-				node.nChs = {new_chapters};
-				node.isVisible = 0;
-				grid.applyTransaction({{update: [node]}})
-			'''
-		else:
-			# update "server side" data
-			tab.rows[link.index[tab.name]]['isVisible'] = 1
-			# update "client side" data
-			with tab.grid:
-				ui.run_javascript(f'''
-					var grid = getElement({tab.grid.id}).gridOptions.api;
-					var node = grid.getRowNode('{link.link}').data;
-					node.nChs = {new_chapters};
-					node.isVisible = 1;
-					grid.applyTransaction({{update: [node]}});
-				''')
-
+		if new_chapters is not None: js += f'\nnode.nChs = {new_chapters};'  # if new_chapter was provided
+		if current_chapter is not None: js += f'\nnode.chapter = {current_chapter};'    # if current chapter was provided
+		# run the javascript
 		with tab.grid:
-			ui.run_javascript()
+			ui.run_javascript(js + '\ngrid.applyTransaction({update: [node]})')
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
@@ -408,7 +392,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		works = load_file(self.settings['json_files_dir'] + tab_name + '.json')
 		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': {work.name: work for work in works}, 'links': {}, 'reading': None, 'open': set()})
 		# generate rowData
-		tab.rows = list(generate_rowData(works, tab_name))
+		tab.rows = list(generate_rowData(works, tab))
 		# create and switch to tab for file
 		with self.tabs:
 			tab.tab = ui.tab(tab_name)
@@ -450,7 +434,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 	async def close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: add more comments
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
-		# if the row being opened is "empty"
+		"""# if the row being opened is "empty"
 		if await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").childrenAfterSort[0].key') in {None, ' '}:
 			# if not (the child of the row being opened has "valid" data instead of key)
 			if not await ui.run_javascript(f'''
@@ -462,9 +446,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 					var grid = getElement({event.sender.id}).gridOptions.api;
 					grid.setRowNodeExpanded(grid.getRowNode("{tab_opened}"), false);
 				''', respond=False)
-				return
+				return"""
 		# if the row being opened is a child of the currently opened row, do nothing
-		elif await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").parent.id') in tab.open:
+		if await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").parent.id') in tab.open:
 			pass
 			# TODO: make this work to "advanced grouped rows", opening a sub row does not close the other opened sub rows of the same parent
 		# if event was caused by (assumedly) closing the opened row, take note of it and `return`
@@ -477,15 +461,12 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# else close all previous open row
 		else:
 			for open_tab in tab.open:
-				await ui.run_javascript(f'''
+				ui.run_javascript(f'''
 					var grid = getElement({event.sender.id}).gridOptions.api;
 					grid.setRowNodeExpanded(grid.getRowNode("{open_tab}"), false);
-				''', respond=False)
+				''')
 		# set open to new opened row
 		tab.open.add(tab_opened)
-	async def open_link(self, link: str) -> None:
-		'opens link provided in new tab'
-		await ui.run_javascript(f"window.open('{link}')", respond=False)
 	async def update_all(self, tab: Dict) -> None:
 		'updates all works provided'
 		from requests_html2 import AsyncHTMLSession
@@ -512,13 +493,16 @@ class GUI():  # pylint: disable=missing-class-docstring
 		print('done updating', tab.name)
 	async def work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: add comments
 		'runs when a work is selected'
-		event = event.args
+		def open_link(link: str) -> None:
+			'opens link provided in new tab'
+			ui.run_javascript(f"window.open('{link}')")
+		event = Dict(event.args)
 		# if neither work nor link was selected (not series, author, etc.), do nothing
-		if not event.rowId.startswith('row-group-name-') or not event.rowId.startswith('https://'): return
+		if 'name' not in event.rowId.split('-') and 'data' not in event: return  # NOTE: check for if this is work may break if work's name has `-name-` in it
 		# if reading
 		if tab.reading:
 			# if link was selected
-			if event.rowId.startswith('https://'):
+			if 'data' in event:
 				# get link
 				link = tab.links[event.value]
 				# if same link is reselected or previous selected is a work and link selected is first
@@ -544,33 +528,23 @@ class GUI():  # pylint: disable=missing-class-docstring
 				# update grid
 				for link in work.links:  # for each link in work that has been affected
 					# update "server side" data
-					row = tab.rows[link.index[tab.name]]
-					row['chapter'] = work.chapter
-					self.update_row(tab, link, link.re())
-
+					self.update_row(tab, link, link.re(), work.chapter)
 				return
 		# if not reading or different work is selected
-		tab.reading = tab.works[_id[0]]
-		# change label
-		tab.label.set_text('Reading: ' + tab.reading.name)
-		# if is link
-		if value[-1] == '‎':
-			# set reading to link
-			tab.reading = tab.reading.links[_id[1]]
+		# if link was selected
+		if 'data' in event:
+			# set reading to link and change label
+			tab.reading = tab.links[event.value]
+			tab.label.set_text('Reading: ' + tab.reading.parent.name)
 			# open link
-			await self.open_link(value)
+			open_link(event.value)
 		# if is name
-		elif value[-1] == '‏':  # pylint: disable=bidirectional-unicode
+		else:
+			# set reading to link and change label
+			tab.reading = tab.works[event.value]
+			tab.label.set_text('Reading: ' + tab.reading.name)
 			# open link
-			await self.open_link(tab.reading.links[0].link)
-
-			# work = tab.works[event['rowIndex']]
-			# if work == tab.reading:
-			# 	work.update()
-			# 	tab.label.set_text('Reading:')
-			# 	tab.reading = None
-			# 	self.update_grid(tab.grid, self.generate_rowData(tab.works, []))
-			# 	return
+			open_link(tab.reading.links[0].link)
 	async def handle_input(self, event: GenericEventArguments) -> None:
 		'handles input from input box'
 		# if input is empty, do nothing

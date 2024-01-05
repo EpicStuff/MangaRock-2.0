@@ -1,4 +1,4 @@
-# Version: 3.5.1
+# Version: 3.5.1, pylint: disable=invalid-name
 import asyncio, os
 from functools import partial as wrap
 from typing import Any, Iterable
@@ -13,15 +13,15 @@ from stuff import Dict  # pylint: disable=wrong-import-position
 
 
 class Work():
-	''' Base Type class to be inherited by subclasses to give custom properties\n
+	''' Base Type class to be inherited by subclasses to give custom properties
 	Custom Book class Example: `class Book(Type): all = {}; prop = {'name': None, 'author': None, 'score': None, 'tags': []}`'''
 	prop: dict = {'name': None}; all: list | dict = []  # prop is short for properties, dict provided by sub object; all = list of all loaded obj/works of this class, eg = incase user wishes to iterate through all books
 	def __init__(self, *args: list, **kwargs: dict) -> None:
 		'''Applies args and kwargs to `self.__dict__` if kwarg is in `self.prop`'''
 		# convert args from list to dict then update them to kwargs
-		kwargs.update({tuple(self.prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in {'', None, *kwargs.values()}})  # type: ignore
+		kwargs.update({tuple(self.prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in {'', None, *kwargs.values()}})
 		# if no name was provided use number as name
-		if kwargs['name'] == '': kwargs['name'] = self.__class__.all.__len__  # type: ignore
+		if kwargs['name'] == '': kwargs['name'] = self.__class__.all.__len__
 		# set self properties to default property values
 		self.__dict__.update(self.prop)
 		# for every kwarg, format it and update `self.__dict__` with it
@@ -52,8 +52,9 @@ class Work():
 			for num, link in enumerate(self.links):  # type: ignore
 				self.links[num] = Link(link, self)  # type: ignore
 	def update(self, what='chapter', source='links'):
-		'updates `self.{what}` based on `self.{source}`'
-		self.__dict__[what] = max([link.latest for link in self.__dict__[source] if not issubclass(link.latest.__class__, Exception)])
+		'updates `self.{what}` based on `self.{source}`, or thats the idea anyways'
+		# create list of links' latest chapters excluding errors and empty strings then get max
+		self.__dict__[what] = max([link.latest for link in self.__dict__[source] if not issubclass(link.latest.__class__, Exception) and link.latest != ''])
 		if what == 'chapter' and source == 'links':
 			for link in self.links:  # pylint: disable=no-member
 				link.re()
@@ -251,9 +252,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 					self._input()
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
 		# create help popup
-		with ui.dialog() as self.help_popup, ui.card():  # TODO: get rid of card round corners
-			ui.code('\n'.join([f"{key}: {val}" for key, val in self.commands.items()]), language='yaml')  # TODO: get rid of round corners
-			ui.button('Close', on_click=self.help_popup.close)
+		with ui.dialog() as self.help_popup, ui.card().props('square'):
+			ui.code('\n'.join([f"{key}: {val}" for key, val in self.commands.items()]), language='yaml')
+			ui.button('Close', on_click=self.help_popup.close).props('square')
 		# setup semaphores for `update_all()`
 		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
 		# css stuff and stuff
@@ -357,7 +358,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			with open(file, 'r', encoding='utf8') as f:
 				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
 		def generate_rowData(works: Iterable, tab: Dict) -> list:  # pylint: disable=invalid-name
-			'turns list of works into list of rows that aggrid can use and group'  # TODO: turn into generator instead
+			'turns list of works into list of rows that aggrid can use and group'
 			index = 0
 			# for each work in works
 			for work in works:
@@ -366,7 +367,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 					# add work to rows with isVisible set to 0 if hide_works_with_no_links is true else 1
 					work.index[tab.name] = index  # unnecessary
 					index += 1
-					yield {**work.__dict__, 'isVisible': 0 if self.settings['hide_works_with_no_links'] else 1}  # TODO: do the shuffle up thing but down for works with no links
+					yield {**work.__dict__, 'isVisible': 0 if self.settings['hide_works_with_no_links'] else 1}  # TODO: Low, do the shuffle up thing but down for works with no links, or maybe readd the disable opening rows with no children
 				else:
 					# for each link in work
 					for link in work.links:
@@ -433,13 +434,13 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# update all works
 		await asyncio.sleep(1)
 		await self.update_all(tab)
-	async def close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: add more comments
+	async def close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add more comments
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
 		# if the row being opened is a child of the currently opened row, do nothing
 		if await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").parent.id') in tab.open:
 			pass
-			# TODO: make this work to "advanced grouped rows", opening a sub row does not close the other opened sub rows of the same parent
+			# TODO: Low, make this work to "advanced grouped rows", opening a sub row does not close the other opened sub rows of the same parent
 		# if event was caused by (assumedly) closing the opened row, take note of it and `return`
 		elif tab_opened in tab.open:
 			tab.open.remove(tab_opened)
@@ -480,7 +481,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			tab.tasks = asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works.values()], return_exceptions=True)
 			await tab.tasks
 		print('done updating', tab.name)
-	async def work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: add comments
+	async def work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add comments
 		'runs when a work is selected'
 		def open_link(link: str) -> None:
 			'opens link provided in new tab'
@@ -496,10 +497,13 @@ class GUI():  # pylint: disable=missing-class-docstring
 				link = tab.links[event.value]
 				# if same link is reselected or previous selected is a work and link selected is first
 				if link == tab.reading or (issubclass(tab.reading, Work) and link == tab.reading.links[0]):
+					# if link has not been updated yet
+					if link.latest == '':
+						print('link has not been updated yet')
+						return
 					# set work's chapter the link's latest chapter
 					work = link.parent
 					work.chapter = link.latest
-					# TODO: deal with the case that the link has not been updated yet
 					tab.reading = None
 			# if name is selected
 			else:
@@ -508,7 +512,11 @@ class GUI():  # pylint: disable=missing-class-docstring
 				# if same work is reselected or work selected is parent of reading link
 				if work == tab.reading or tab.reading in work.links:
 					# set work's chapter to latest chapter
-					work.update()
+					try:
+						work.update()
+					except (ValueError, TypeError):
+						print('work has not been updated yet')
+						return
 					tab.reading = None
 			# if no longer reading
 			if not tab.reading:
@@ -544,22 +552,22 @@ class GUI():  # pylint: disable=missing-class-docstring
 			# get name of open tab
 			name = self.tabs._props['model-value']  # pylint: disable=protected-access
 			tab = self.open_tabs[name]
-			command = event.sender.value
+			entry = event.sender.value
 			# if is help command: list all commands
-			if command == '/help':
+			if entry == '/help':
 				self.help_popup.open()
 			# if is debug command: open debug tab
-			elif command == '/debug':
+			elif entry == '/debug':
 				self._debug()
 			# if is reload command and not the main tab: reupdate all
-			elif command == '/reupdate' and name != 'Main':
+			elif entry == '/reupdate' and name != 'Main':
 				tab.tasks.cancel()
 				await self.update_all(tab)
 			# if is refresh command: re"draw" grid
-			elif command == '/refresh':
+			elif entry == '/refresh':
 				tab.grid.update()
 			# if is reload: re load file
-			elif command == '/reload':
+			elif entry == '/reload':
 				if name == 'Main':
 					self.open_tabs.Main.grid.options['rowData'] = get_files(self.settings)
 					self.open_tabs.Main.grid.update()
@@ -567,10 +575,10 @@ class GUI():  # pylint: disable=missing-class-docstring
 					self.close_tab(name)
 					await self._file_opened(Dict({'args': {'data': {'name': name}}}))
 			# if is save or exit command: save all works in tab and
-			elif command == '/save' and name != 'Main':
+			elif entry == '/save' and name != 'Main':
 				save_to_file(tab.works.values(), self.settings['json_files_dir'] + name + '.json')
 				ui.notify('Saved ' + name)
-			elif command == '/exit':
+			elif entry == '/exit':
 				# save all open tabs
 				for name, tab in self.open_tabs.items():
 					if name != 'Main':
@@ -579,15 +587,22 @@ class GUI():  # pylint: disable=missing-class-docstring
 				# close app
 				app.shutdown()
 			# if is close command: close current tab
-			elif command == '/close' and name != 'Main':
+			elif entry == '/close' and name != 'Main':
 				self.close_tab(name)
 			# if is quit command: exit without saving
-			elif command == '/quit':
+			elif entry == '/quit':
 				app.shutdown()
-			elif command == '/test':
+			elif entry == '/test':
 				pass
+			# if is not a command: eval or exec as python code and print output
 			else:
-				pass  # TODO: do the eval thing
+				try:
+					print(eval(entry[1:], globals(), locals()))  # pylint: disable=eval-used
+				except Exception:  # pylint: disable=broad-exception-caught
+					try:
+						print(exec(entry, globals(), locals()))  # pylint: disable=exec-used
+					except Exception as e:  # pylint: disable=broad-exception-caught
+						print(e)  # pylint: disable=eval-used
 		# clear input
 		event.sender.set_value(None)
 
@@ -641,7 +656,7 @@ def main(name: str, *args, _dir: str | None = None, settings_file='settings.yaml
 	if __debug__: print(f'working directory: {os.getcwd()}')
 	# setup gui
 	settings = load_settings(settings_file)
-	gui = GUI(settings, get_files(settings))
+	gui = GUI(settings, get_files(settings))  # pylint: disable=unused-variable
 	# start gui
 	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
 def load_settings(settings_file: str, _default_settings: str = default_settings) -> dict:
@@ -650,12 +665,15 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 		with open(settings_file, 'r', encoding='utf8') as f: file = f.readlines()  # loads settings_file into file
 		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
 		col = 0; adding = set(); done = set()
+		# remove all extra spaces from 'sites:' line
 		while '  ' in file[start][14:]:
-			file[start] = file[start][:14] + file[start][14:].replace('  ', ' ')  # remove all extra spaces from 'sites:' line
-		for line_num, line in enumerate(file[start:], start):  # remove all the other extra spaces, TODO: replace enumerate with range
+			file[start] = file[start][:14] + file[start][14:].replace('  ', ' ')
+		# remove all the other extra spaces
+		for line_num in range(start, len(file)):
 			while '   ' in file[line_num][4:]:
 				file[line_num] = file[line_num][:4] + file[line_num][4:].replace('   ', '  ')
-		while len(done) != len(file[start:]):  # while not all lines have been formatted
+		# while not all lines have been formatted
+		while len(done) != len(file[start:]):
 			if len(adding) + len(done) == len(file[start:]): adding = set()  # if all lines after and including 'sites:' are in adding then remove everything from adding
 			for line_num, line in enumerate(file[start:], start):  # for each line after and including 'sites:'
 				if line[0:9] == '    null:': done.add(line_num)

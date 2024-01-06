@@ -251,10 +251,10 @@ class GUI():  # pylint: disable=missing-class-docstring
 				with ui.row().classes('w-full'):
 					self._input()
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
-		# create help popup
-		with ui.dialog() as self.help_popup, ui.card().props('square'):
-			ui.code('\n'.join([f"{key}: {val}" for key, val in self.commands.items()]), language='yaml')
-			ui.button('Close', on_click=self.help_popup.close).props('square')
+		# create popup
+		with ui.dialog() as self.popup, ui.card().props('square'):
+			self.popup_text = ui.markdown('')
+			ui.button('Close', on_click=self.popup.close).props('square')
 		# setup semaphores for `update_all()`
 		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
 		# css stuff and stuff
@@ -555,7 +555,19 @@ class GUI():  # pylint: disable=missing-class-docstring
 			entry = event.sender.value
 			# if is help command: list all commands
 			if entry == '/help':
-				self.help_popup.open()
+				self.popup_text.set_content('\n\n'.join([f"{key}: {val}" for key, val in self.commands.items()]))
+				self.popup.open()
+			# if is error command: open error codes
+			elif entry == '/error':
+				self.popup_text.set_content('''
+					Error Codes:\n
+					    -999.1: site not supported\n
+					    -999.2: Connection Error\n
+					    -999.3: rendering error, probably timeout\n
+					    -999.4: parsing error\n
+					    -999.5: whatever was extracted was not a number
+				''')
+				self.popup.open()
 			# if is debug command: open debug tab
 			elif entry == '/debug':
 				self._debug()

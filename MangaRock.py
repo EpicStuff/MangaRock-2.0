@@ -1,4 +1,4 @@
-# Version: 3.5.1, pylint: disable=invalid-name
+# Version: 3.5.2, pylint: disable=invalid-name
 import asyncio, os
 from functools import partial as wrap
 from typing import Any, Iterable
@@ -496,7 +496,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 				# get link
 				link = tab.links[event.value]
 				# if same link is reselected or previous selected is a work and link selected is first
-				if link == tab.reading or (issubclass(tab.reading, Work) and link == tab.reading.links[0]):
+				if link == tab.reading or (isinstance(tab.reading, Work) and link == tab.reading.links[0]):
 					# if link has not been updated yet
 					if link.latest == '':
 						print('link has not been updated yet')
@@ -547,12 +547,12 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# if input is empty, do nothing
 		if event.sender.value == '':
 			return
+		# get name of open tab, the tab, and the value
+		name = self.tabs._props['model-value']  # pylint: disable=protected-access
+		tab = self.open_tabs[name]
+		entry = event.sender.value
 		# if is a command
 		if event.sender.value[0] == '/':
-			# get name of open tab
-			name = self.tabs._props['model-value']  # pylint: disable=protected-access
-			tab = self.open_tabs[name]
-			entry = event.sender.value
 			# if is help command: list all commands
 			if entry == '/help':
 				self.popup_text.set_content('\n\n'.join([f"{key}: {val}" for key, val in self.commands.items()]))
@@ -615,6 +615,43 @@ class GUI():  # pylint: disable=missing-class-docstring
 						print(exec(entry, globals(), locals()))  # pylint: disable=exec-used
 					except Exception as e:  # pylint: disable=broad-exception-caught
 						print(e)  # pylint: disable=eval-used
+		# if is not a command
+		# if reading
+		elif tab.reading:
+			try:
+				# if entry starts with +/-
+				if event.sender.value[0] in ('+', '-'):
+					# if reading is a link
+					if isinstance(tab.reading, Link):
+						# increase current chapter by input
+						tab.reading.parent.chapter += float(event.sender.value)
+					else:
+						# increase current chapter by input
+						tab.reading.chapter += float(event.sender.value)
+				# otherwise
+				else:
+					# if reading is a link
+					if isinstance(tab.reading, Link):
+						# increase current chapter by input
+						tab.reading.parent.chapter = float(event.sender.value)
+					else:
+						# set current chapter to input
+						tab.reading.chapter = float(event.sender.value)
+				# TODO: maybe merge the following few lines and the ones in `work_selected()` into a function
+				# change label
+				tab.label.set_text('Reading:')
+				# update grid
+				tmp = tab.reading.parent.links if isinstance(tab.reading, Link) else tab.reading.links
+				tmp2 = tab.reading.parent.chapter if isinstance(tab.reading, Link) else tab.reading.chapter
+				for link in tmp:
+					self.update_row(tab, link, link.re(), tmp2)
+				# exit reading mode
+				tab.reading = None
+			except ValueError as e:
+				print(e)
+		else:
+			# TODO: make it so you can select the work by name or something
+			pass
 		# clear input
 		event.sender.set_value(None)
 

@@ -1,7 +1,7 @@
 # Version: 3.5.2, pylint: disable=invalid-name
 import asyncio, os
 from functools import partial as wrap
-from typing import Any, Iterable
+from typing import Any, Iterable, Self
 
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
@@ -79,6 +79,9 @@ class Work():
 	def asdict(self) -> dict:
 		'returns `self` as a dictionary'
 		return {**{'format': self.__class__.__name__}, **{key: val for key, val in self.__dict__.items() if val not in ([], "None", None) if key != 'lChs'}}  # convert attributes to a dictionary
+	def work(self) -> Self:
+		'returns `self`'
+		return self
 	# def __iter__(self) -> object: return self  # required for to iter over for some reason
 	def __str__(self) -> str:
 		'returns `self` in `str` format'
@@ -219,6 +222,9 @@ class Link():
 	def asdict(self):
 		'convert `self` to a string'
 		return self.link
+	def work(self) -> Work:
+		'returns `self.parent`'
+		return self.parent
 	def __repr__(self) -> str:
 		'represent `self` as `self.link` between <>'
 		return f'<{self.link}>'  # type: ignore
@@ -621,30 +627,18 @@ class GUI():  # pylint: disable=missing-class-docstring
 			try:
 				# if entry starts with +/-
 				if event.sender.value[0] in ('+', '-'):
-					# if reading is a link
-					if isinstance(tab.reading, Link):
-						# increase current chapter by input
-						tab.reading.parent.chapter += float(event.sender.value)
-					else:
-						# increase current chapter by input
-						tab.reading.chapter += float(event.sender.value)
+					# increase current chapter by input
+					tab.reading.work().chapter += float(event.sender.value)
 				# otherwise
 				else:
-					# if reading is a link
-					if isinstance(tab.reading, Link):
-						# increase current chapter by input
-						tab.reading.parent.chapter = float(event.sender.value)
-					else:
-						# set current chapter to input
-						tab.reading.chapter = float(event.sender.value)
+					# set current chapter to input
+					tab.reading.work().chapter = float(event.sender.value)
 				# TODO: maybe merge the following few lines and the ones in `work_selected()` into a function
 				# change label
 				tab.label.set_text('Reading:')
 				# update grid
-				tmp = tab.reading.parent.links if isinstance(tab.reading, Link) else tab.reading.links
-				tmp2 = tab.reading.parent.chapter if isinstance(tab.reading, Link) else tab.reading.chapter
-				for link in tmp:
-					self.update_row(tab, link, link.re(), tmp2)
+				for link in tab.reading.work().links:
+					self.update_row(tab, link, link.re(), tab.reading.work().chapter)
 				# exit reading mode
 				tab.reading = None
 			except ValueError as e:

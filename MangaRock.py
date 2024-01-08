@@ -371,7 +371,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 				# if work format has no links or work has no links
 				if 'links' not in work.prop or work.links == []:
 					# add work to rows with isVisible set to 0 if hide_works_with_no_links is true else 1
-					work.index[tab.name] = index  # unnecessary
+					'work.index[tab.name] = index  # unnecessary'
 					index += 1
 					yield {**work.__dict__, 'isVisible': 0 if self.settings['hide_works_with_no_links'] else 1}  # TODO: Low, do the shuffle up thing but down for works with no links, or maybe readd the disable opening rows with no children
 				else:

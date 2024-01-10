@@ -1,5 +1,0 @@
-nicegui
-ruamel.yaml
-requests-html2
-rich
-lxml

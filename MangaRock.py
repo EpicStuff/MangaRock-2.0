@@ -688,7 +688,6 @@ sites:  # site,         find,        with,                       then_find, and 
     www.mangageko.com: *006
     chapmanganato.com: *008
     readmanganato.com: *008
-    # flamescans.org:  *009
 '''
 def main(name: str, *args, _dir: str | None = None, settings_file='settings.yaml') -> None:  # pylint: disable=unused-argument
 	'Main function'

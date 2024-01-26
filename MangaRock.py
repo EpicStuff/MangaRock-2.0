@@ -139,6 +139,7 @@ class Link():
 			assert link.status_code == 200  # make sure connection was successful
 		except Exception as e:  # connection error
 			print('connection error:', self.link)
+			link = str(link)
 			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e
 			return self.re(-999.2)
@@ -152,6 +153,7 @@ class Link():
 				print('done rendering', self.link, '-', self.site)
 			except Exception as e:
 				print('failed to render:', self.link)  # render error
+				link = str(link)
 				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 				self.latest = e
 				return self.re(-999.3)
@@ -194,6 +196,7 @@ class Link():
 					assert tmp is not None
 					link = tmp
 		except (AttributeError, AssertionError) as e:
+			link = str(link)
 			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # parsing error
 			return self.re(-999.4)
@@ -204,6 +207,7 @@ class Link():
 			if float(self.latest) == self.latest:
 				self.latest = float(self.latest)
 		except Exception as e:
+			link = str(link)
 			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # whatever was extracted was not a number
 			return self.re(-999.5)
@@ -740,7 +744,7 @@ def save_to_file(works: Iterable, file: str) -> None:
 	'Saves all works in `Works.all` to file specified'
 	from json import dump
 	with open(file, 'w', encoding='utf8') as f:
-		dump(works, f, indent='\t', default=lambda work: work.asdict())
+		dump(list(works), f, indent='\t', default=lambda work: work.asdict())
 
 
 if __name__ in {"__main__", "__mp_main__"}:

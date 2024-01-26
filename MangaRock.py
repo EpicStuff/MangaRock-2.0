@@ -1,4 +1,4 @@
-# Version: 3.5.2, pylint: disable=invalid-name
+# Version: 3.5.4, pylint: disable=invalid-name
 import asyncio, os
 from functools import partial as wrap
 from typing import Any, Iterable, Self
@@ -7,7 +7,7 @@ from nicegui import app, ui
 from nicegui.events import GenericEventArguments
 
 from rich.console import Console; console = Console()
-# from rich.traceback import install; install(width=os.get_terminal_size().columns)  # pylint: disable=wrong-import-position
+from rich.traceback import install; install(width=os.get_terminal_size().columns)  # pylint: disable=wrong-import-position
 
 from stuff import Dict  # pylint: disable=wrong-import-position
 
@@ -622,9 +622,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 					print(eval(entry[1:], globals(), locals()))  # pylint: disable=eval-used
 				except Exception:  # pylint: disable=broad-exception-caught
 					try:
-						print(exec(entry, globals(), locals()))  # pylint: disable=exec-used
-					except Exception as e:  # pylint: disable=broad-exception-caught
-						print(e)  # pylint: disable=eval-used
+						exec(entry, globals(), locals())  # pylint: disable=exec-used
+					except Exception:  # pylint: disable=broad-exception-caught
+						console.print_exception(show_locals=True, width=os.get_terminal_size().columns)  # pylint: disable=eval-used
 		# if is not a command
 		# if reading
 		elif tab.reading:

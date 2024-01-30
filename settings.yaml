@@ -10,8 +10,8 @@ to_display:  # columns to display for each Type, do not include name (it's requi
     Text: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
     example: *1
     .test: *1
-workers: 8  # default: 3
-renderers: 3  # default: 1
+workers: 1  # default: 3
+renderers: 1  # default: 1
 hide_unupdated_works: true  # default: true
 hide_works_with_no_links: false # default: true
 hide_updates_with_errors: false  # default: false
@@ -30,6 +30,7 @@ sites:  # site,        find,        with,                       then_find, and g
     manganato.com:     &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
     reaper-scans.com:  &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
     mangadex.org:      &011 [div,   class: text-center,         null,      null,          -|\.,     -1,       true]
+    wattpad.com:       &012 [./plugins/wattpad.py, main]
     null: [*001, *002, *003, *004, *005, *006, *008, *009, *011]  # for aligning reasons
     www.mcreader.net:  *006
     www.mangageko.com: *006

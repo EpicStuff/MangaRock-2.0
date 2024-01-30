@@ -1,4 +1,4 @@
-# Version: 3.5.4, pylint: disable=invalid-name
+# Version: 3.5.5, pylint: disable=invalid-name
 import asyncio, os
 from functools import partial as wrap
 from typing import Any, Iterable, Self
@@ -107,12 +107,14 @@ class Link():
 			-999.2 = Connection Error
 			-999.3 = rendering error, probably timeout
 			-999.4 = parsing error
-			-999.5 = whatever was extracted was not a number'''
+			-999.5 = whatever was extracted was not a number
+			-999.6 = failed to load plugin
+			-999.7 = plugin error'''
 		import re
 
 		import bs4
 
-		# if site is supported
+		# if site is not supported
 		if self.site not in sites:
 			self.latest = Exception('site not supported')  # site not supported
 			return self.re(-999.1)
@@ -131,6 +133,25 @@ class Link():
 				elif tag.__class__ is list and all([t in self.parent.tags for t in tag]):
 					self.latest = Exception('skipped')
 					return self.re(0)
+		# if is "plugin"
+		if sites[0].split('.')[-1] in ('py', 'pyw'):
+			# import plugin
+			try:
+				plugin = __import__(sites[0][:-3]).__dict__[sites[1]]
+			except (ModuleNotFoundError, KeyError) as e:
+				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
+				print('plugin loading error:', self.link)
+				self.latest = e
+				return self.re(-999.6)
+			# run plugin
+			try:
+				self.latest = plugin(self.link)
+				return self.re()
+			except Exception as e:
+				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
+				print('plugin error:', self.link)
+				self.latest = e
+				return self.re(-999.7)
 		# tmp: special stuff for bato.to
 		if self.site == 'bato.to': link = self.link.replace('title/', 'rss/series/') + '.xml'
 		# connecting to site

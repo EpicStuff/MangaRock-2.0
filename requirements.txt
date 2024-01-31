@@ -1,5 +1,6 @@
+epicstuff
+lxml
 nicegui
-ruamel.yaml
 requests-html2
 rich
-lxml
+ruamel.yaml

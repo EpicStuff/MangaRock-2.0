@@ -9,7 +9,7 @@ from nicegui.events import GenericEventArguments
 from rich.console import Console; console = Console()
 from rich.traceback import install; install(width=os.get_terminal_size().columns)  # pylint: disable=wrong-import-position
 
-from stuff import Dict  # pylint: disable=wrong-import-position
+from epicstuff import Dict  # pylint: disable=wrong-import-position
 
 
 class Work():

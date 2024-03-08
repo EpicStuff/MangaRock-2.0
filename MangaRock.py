@@ -1,4 +1,4 @@
-# Version: 3.5.5, pylint: disable=invalid-name
+# Version: 3.6.0, pylint: disable=invalid-name
 import asyncio, os
 from functools import partial as wrap
 from typing import Any, Iterable, Self
@@ -254,6 +254,9 @@ class Link():
 		'represent `self` as `self.link` between <>'
 		return f'<{self.link}>'  # type: ignore
 class GUI():  # pylint: disable=missing-class-docstring
+	styles = Dict({
+		'tab_panel': 'height: calc(100vh - 84px); width: calc(100vw - 32px)'
+	})
 	def __init__(self, settings: dict, files: list[dict[str, str]]) -> None:
 		# setup vars
 		self.settings = settings
@@ -265,7 +268,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# create panel holder
 		with ui.tab_panels(self.tabs, value=tab) as self.panels:
 			# create main panel
-			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+			with ui.tab_panel('Main').style(GUI.styles.tab_panel):
 				ui.label('Choose File: ')
 				gridOptions = {  # pylint: disable=invalid-name
 					'defaultColDef': {
@@ -291,7 +294,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# css stuff and stuff
 		ui.query('div').style('gap: 0')
 	def _input(self) -> ui.input:
-		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self.handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
+		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self._handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 	def _debug(self) -> None:
 		'opens debug tab'
 		# if debug tab is already open, switch to it
@@ -303,14 +306,14 @@ class GUI():  # pylint: disable=missing-class-docstring
 		with self.tabs:
 			ui.tab('Debug')
 		with self.panels:
-			with ui.tab_panel('Debug').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+			with ui.tab_panel('Debug').style(GUI.styles.tab_panel):
 				ui.label('Updating:')
 				with ui.row().classes('w-full'):
 					self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
 					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
 		# switch to tab
 		self.switch_tab(Dict({'args': 'Debug'}))
-	def jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
+	def _jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
 		'upgrade aggrid from community to enterprise'
 		from pathlib import Path
 
@@ -369,6 +372,33 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# run the javascript
 		with tab.grid:
 			ui.run_javascript(js + '\ngrid.applyTransaction({update: [node]})')
+	async def button_pressed(self):
+		'runs when the button in opened file tab is pressed'
+		name = self.tabs._props['model-value']  # pylint: disable=protected-access
+		tab = self.open_tabs[name]
+		# get selected work, if any
+		selected = await tab.grid.get_selected_row() or await ui.run_javascript(f'return getElement({tab.grid.id}).gridOptions.api.getSelectedNodes()[0].groupData')
+		print(list(selected.values())[0])
+		# if no work is selected, do nothing
+		if not selected:
+			print('no work selected')
+		else:
+			self.edit_work(tab.works[list(selected.values())[0]])
+	def edit_work(self, work):
+		# if file already open, switch to it
+		if work.name in self.open_tabs:
+			self.switch_tab(Dict({'args': work.name}))
+			return
+		# maybe unnecessary
+		tab = self.open_tabs[work.name] = Dict({'name': work.name})
+		# create and switch to tab for file
+		with self.tabs:
+			tab.tab = ui.tab(work.name)
+		self.switch_tab(Dict({'args': work.name}))
+		# create panel for file
+		with self.panels:
+			with ui.tab_panel(work.name).style(GUI.styles.tab_panel) as tab.panel:
+				tab.label = ui.label(f'Editing: {work.name}')
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
@@ -433,7 +463,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		self.switch_tab(Dict({'args': tab_name}))
 		# create panel for file
 		with self.panels:
-			with ui.tab_panel(tab_name).style('height: calc(100vh - 84px); width: calc(100vw - 32px)') as tab.panel:
+			with ui.tab_panel(tab_name).style(GUI.styles.tab_panel) as tab.panel:
 				tab.label = ui.label('Reading: ')
 				gridOptions = {  # pylint: disable=invalid-name
 					'defaultColDef': {
@@ -452,20 +482,21 @@ class GUI():  # pylint: disable=missing-class-docstring
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
 					'groupAllowUnbalanced': True,
+					'rowSelection': 'single',
 					':getRowId': 'params => params.data.link',
 					':isExternalFilterPresent': '() => true',
 					':doesExternalFilterPass': 'params => params.data.isVisible',
 				}
-				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)'))
-				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
-				tab.grid.on('cellDoubleClicked', wrap(self.work_selected, tab))
+				tab.grid = self._jailbreak(ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)'))
+				tab.grid.on('rowGroupOpened', wrap(self._close_all_other, tab))
+				tab.grid.on('cellDoubleClicked', wrap(self._work_selected, tab))
 				with ui.row().classes('w-full').style('gap: 0'):
 					self._input()  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
-					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
+					ui.button(on_click=self.button_pressed).props('square').style('width: 40px; height: 40px;')
 		# update all works
 		await asyncio.sleep(1)
 		await self.update_all(tab)
-	async def close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add more comments
+	async def _close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add more comments
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
 		# if the row being opened is a child of the currently opened row, do nothing
@@ -512,7 +543,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			tab.tasks = asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works.values()], return_exceptions=True)
 			await tab.tasks
 		print('done updating', tab.name)
-	async def work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add comments
+	async def _work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add comments
 		'runs when a work is selected'
 		def open_link(link: str) -> None:
 			'opens link provided in new tab'
@@ -573,7 +604,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			tab.label.set_text('Reading: ' + tab.reading.name)
 			# open link
 			open_link(tab.reading.links[0].link)
-	async def handle_input(self, event: GenericEventArguments) -> None:
+	async def _handle_input(self, event: GenericEventArguments) -> None:
 		'handles input from input box'
 		# if input is empty, do nothing
 		if event.sender.value == '':

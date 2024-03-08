@@ -293,6 +293,8 @@ class GUI():  # pylint: disable=missing-class-docstring
 		self.workers, self.renderers = asyncio.Semaphore(self.settings['workers']), asyncio.Semaphore(self.settings['renderers'])
 		# css stuff and stuff
 		ui.query('div').style('gap: 0')
+		# run stuff
+		ui.timer(0, self.stuff, once=True)
 	def _input(self) -> ui.input:
 		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self._handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 	def _debug(self) -> None:
@@ -399,6 +401,11 @@ class GUI():  # pylint: disable=missing-class-docstring
 		with self.panels:
 			with ui.tab_panel(work.name).style(GUI.styles.tab_panel) as tab.panel:
 				tab.label = ui.label(f'Editing: {work.name}')
+	def save_tab(self, tab, name) -> None:
+		'Saves all works in `Works.all` to file specified'
+		from json import dump
+		with open(self.settings['json_files_dir'] + name + '.json', 'w', encoding='utf8') as f:
+			dump(list(tab.works.values()), f, indent='\t', default=lambda work: work.asdict())
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
@@ -650,13 +657,13 @@ class GUI():  # pylint: disable=missing-class-docstring
 					await self._file_opened(Dict({'args': {'data': {'name': name}}}))
 			# if is save or exit command: save all works in tab and
 			elif entry == '/save' and name != 'Main':
-				save_to_file(tab.works.values(), self.settings['json_files_dir'] + name + '.json')
+				self.save_tab(tab, name)
 				ui.notify('Saved ' + name)
 			elif entry == '/exit':
 				# save all open tabs
 				for name, tab in self.open_tabs.items():
 					if name != 'Main':
-						save_to_file(tab.works.values(), self.settings['json_files_dir'] + name + '.json')
+						self.save_tab(tab, name)
 						ui.notify('Saved ' + name)
 				# close app
 				app.shutdown()
@@ -704,6 +711,41 @@ class GUI():  # pylint: disable=missing-class-docstring
 			pass
 		# clear input
 		event.sender.set_value(None)
+	async def stuff(self):
+		async def autosave():
+			import datetime, dateparser, pytimeparse
+			# if autosave interval is not provided, disable autosave
+			if self.settings['autosave']['interval'] is None:
+				return
+			# if autosave start is provided
+			if self.settings['autosave']['start']:
+				# try to parse then wait until start time
+				try:
+					await asyncio.sleep((dateparser.parse(self.settings['autosave']['start'], settings={'PREFER_DATES_FROM': 'future'}) - datetime.datetime.now()).total_seconds())
+				except (ValueError, TypeError):
+					ui.notify('failed to parse start time, starting now')
+			# parse interval
+			try:
+				interval = float(self.settings['autosave']['interval']) * 60
+			except ValueError:
+				interval = pytimeparse.parse(self.settings['autosave']['interval'])
+			if interval is None:
+				with self.tabs:
+					ui.notify('failed to parse interval, autosave disabled')
+			elif interval <= 0:
+				with self.tabs:
+					ui.notify('autosave interval needs to be > 0, autosave disabled')
+			else:
+				while True:
+					print('test')
+					await asyncio.sleep(interval)
+					for name, tab in self.open_tabs.items():
+						if name != 'Main':
+							self.save_tab(tab, name)
+							with self.tabs:
+								ui.notify('Saved ' + name)
+		# "runs" stuff
+		await asyncio.gather(autosave())
 
 
 # pylint: disable-next=invalid-name
@@ -711,6 +753,9 @@ default_settings = '''
 dark_mode: true  # default: true
 json_files_dir: ./  # default: ./
 tags_to_skip: [Skip, [Complete, Read]]  # works with specified tags will have update skipped and be hidden, [A, [B, C]] = A or (B and C)
+autosave:  # default: null, null = disabled, accepts reasonable inputs (eg.: 8:30 pm, 30 min)
+    start: null     # when to start autosaving, does nothing if interval is null
+    interval: null  # interval to autosave, starts whenever if start is null, if is single number, assumes minutes
 font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
 default_column_width: 16  # default: 16
 row_height: 32  # default: 32
@@ -786,17 +831,12 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
 	settings = yaml.load(_default_settings.replace('\t', ''))  # set default_settings
 	try: file = open(settings_file, 'r', encoding='utf8'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
-	except FileNotFoundError as e: print(e)  # except: print error
+	except FileNotFoundError: print('settings file not found, creating new settings file')
 	with open(settings_file, 'w', encoding='utf8') as file: yaml.dump(settings, file)  # save settings to settings_file
 	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
 def get_files(settings) -> list[dict[str, Any]]:
 	'returns list of files in json_files_dir that ends with .json'
 	return [{'name': file.split('.json')[0]} for file in os.listdir(settings['json_files_dir']) if file.split('.')[-1] == 'json']
-def save_to_file(works: Iterable, file: str) -> None:
-	'Saves all works in `Works.all` to file specified'
-	from json import dump
-	with open(file, 'w', encoding='utf8') as f:
-		dump(list(works), f, indent='\t', default=lambda work: work.asdict())
 
 
 if __name__ in {"__main__", "__mp_main__"}:

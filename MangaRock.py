@@ -1,4 +1,4 @@
-# Version: 3.6.0, pylint: disable=invalid-name
+# Version: 3.6.1, pylint: disable=invalid-name
 import asyncio
 import os
 from functools import partial as wrap
@@ -80,7 +80,14 @@ class Work(Dict):
 		cls.all = works
 	def to_dict(self) -> dict:
 		'returns `self` as a dictionary'
-		return {**{'format': self.format}, **{key: val for key, val in self.items() if val not in ([], "None", None) if key != 'lChs'}}  # convert attributes to a dictionary
+		# d = {'format': self.format}
+		# for key, val in self.items():
+		# 	if val not in ([], "None", None) and key not in ('lChs', 'prop'):
+		# 		if key == 'links':
+		# 			d[key] = [link.to_dict() for link in val]
+		# 		d[key] = val
+		# return d
+		return {**{'format': self.format}, **{key: val if key != 'links' else [link.to_dict() for link in val] for key, val in self.items() if val not in ([], "None", None) if key not in ('lChs', 'prop')}}  # convert attributes to a dictionary
 	def work(self) -> Self:
 		'returns `self`'
 		return self
@@ -140,17 +147,17 @@ class Link():
 			assert link.status_code == 200  # make sure connection was successful
 		except Exception as e:  # connection error
 			print('connection error:', self.link)
-			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
+			# console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e
 			return self.re(-999.2)
 		# if site needs to be rendered, render
 		if sites[6]:
 			try:
-				print('rendering', self.link, '-', self.site)
+				# print('rendering', self.link, '-', self.site)
 				async with renderers:  # limit the number of works rendering at a time
 					# render link
 					async with link.async_render(reload=True, wait_until='networkidle'): pass
-				print('done rendering', self.link, '-', self.site)
+				# print('done rendering', self.link, '-', self.site)
 			except Exception as e:
 				print('failed to render:', self.link)  # render error
 				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
@@ -202,8 +209,8 @@ class Link():
 		try:
 			self.latest = float(re.split(sites[4], link)[sites[5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 			# convert latest chapter to int if has .0
-			if float(self.latest) == self.latest:
-				self.latest = float(self.latest)
+			if int(self.latest) == self.latest:
+				self.latest = int(self.latest)
 		except Exception as e:
 			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # whatever was extracted was not a number
@@ -351,7 +358,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		'Saves all works in `Works.all` to file specified'
 		from json import dump
 		with open(self.settings['json_files_dir'] + name + '.json', 'w', encoding='utf8') as f:
-			dump(list(tab.works.values()), f, indent='\t', default=lambda work: work.to_dict())
+			dump([work.to_dict() for work in tab.works.values()], f, indent='\t')
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
@@ -404,7 +411,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		cols[-1]['resizable'] = False
 		# load works from file and reference them in open_tabs
 		works = load_file(self.settings['json_files_dir'] + tab_name + '.json')
-		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': {work.name: work for work in works}, 'links': {}, 'reading': None, 'open': set()})
+		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': {work.name: work for work in works}, 'links': Dict(), 'reading': None, 'open': set()}, recursive_convert=False)
 		# generate rowData
 		tab.rows = list(generate_rowData(works, tab))
 		# create and switch to tab for file

@@ -1,8 +1,0 @@
-epicstuff
-lxml
-nicegui
-requests-html2
-rich
-ruamel.yaml
-dateparser
-pytimeparse

@@ -425,7 +425,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 
 			with open(file, 'r', encoding='utf8') as f:
 				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
-		def generate_rowData(works: Iterable, tab: Dict) -> list:  # pylint: disable=invalid-name
+		def generate_rowData(works: Iterable, tab: Dict):  # pylint: disable=invalid-name
 			'turns list of works into list of rows that aggrid can use and group'
 			index = 0
 			# for each work in works
@@ -460,10 +460,16 @@ class GUI():  # pylint: disable=missing-class-docstring
 		cols += [{'field': key, 'rowGroup': True, 'hide': True} if val[1] == 'group' else {'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']} for key, val in self.settings['to_display'][tab_name].items()]  # convert into aggrid cols forma
 		cols[-1]['resizable'] = False
 		# load works from file and reference them in open_tabs
-		works = load_file(self.settings['json_files_dir'] + tab_name + '.json')
-		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': {work.name: work for work in works}, 'links': {}, 'reading': None, 'open': set()})
+		tab = self.open_tabs[tab_name] = Dict({
+			'name': tab_name,
+			'works': {work.name: work for work in load_file(self.settings['json_files_dir'] + tab_name + '.json')},
+			'links': {},
+			'reading': None,
+			'open': set()})
+		# sort works
+		
 		# generate rowData
-		tab.rows = list(generate_rowData(works, tab))
+		tab.rows = list(generate_rowData(self.open_tabs[tab_name].works, tab))
 		# create and switch to tab for file
 		with self.tabs:
 			tab.tab = ui.tab(tab_name)

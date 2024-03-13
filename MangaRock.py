@@ -1,4 +1,4 @@
-# Version: 3.6.1, pylint: disable=invalid-name
+# Version: 3.6.2, pylint: disable=invalid-name
 import asyncio
 import os
 from functools import partial as wrap
@@ -19,7 +19,7 @@ class Work(Dict):
 	def __init__(self, format: str, *args: list, **kwargs: dict) -> None:  # pylint:disable=redefined-builtin
 		'''Applies args and kwargs to "`self.__dict__`" if kwarg is in `self.formats[format]`'''
 		self.format = format
-		prop = self.prop = self.formats[format]  # TODO: when format of work is not in settings, handle it instead of just crashing
+		prop = self.formats[format]  # TODO: when format of work is not in settings, handle it instead of just crashing
 		# convert args from list to dict then update them to kwargs
 		kwargs.update({tuple(prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in ['', None, *kwargs.values()]})
 		# set self properties to default property values
@@ -60,24 +60,6 @@ class Work(Dict):
 		if what == 'chapter' and source == 'links':
 			for link in self.links:  # pylint: disable=no-member
 				link.re()
-	@classmethod
-	def sort(cls, sort_by: str = 'name', look_up_table: dict | None = None, reverse: bool = True) -> None:
-		'''sort `cls.all` by given dict, defaults to name'''
-		works = cls.all
-		# if `works` is a dict, convert it to a list
-		if works.__class__ is dict:
-			works = works.values()  # pylint: disable=no-member
-		# sort
-		if sort_by == 'name':
-			# for each work in `works` sort by `work.name`
-			works.sort(key=lambda work: work.name, reverse=reverse)
-		elif look_up_table is not None:
-			# for each work in `works` get `work.sort_by` and convert into number through look up table
-			works.sort(key=lambda work: look_up_table[work[sort_by]], reverse=reverse)
-		# if `cls.all` is a dict, convert it back to a dict
-		if isinstance(cls.all, dict):
-			work = {work.name: work for work in works}
-		cls.all = works
 	def to_dict(self) -> dict:
 		'returns `self` as a dictionary'
 		# d = {'format': self.format}
@@ -128,7 +110,7 @@ class Link():
 		link = self.link
 		sites = sites[self.site]
 		# if tags specified in settings are in work, skip
-		if 'tags' in self.parent.prop:
+		if 'tags' in self.parent:
 			# for each tag/list of tags that are to be skipped
 			for tag in tags_to_skip:
 				# if tag is str and in work, "skip"
@@ -375,15 +357,37 @@ class GUI():  # pylint: disable=missing-class-docstring
 
 			with open(file, 'r', encoding='utf8') as f:
 				return load(f, object_hook=lambda kwargs: Work(**kwargs))
+		def sort(works: dict | list, settings):
+			'''sort `cls.all` by given dict, defaults to name'''
+			was_dict = works.__class__ is dict
+			# if `what` is a dict, convert it to a list
+			if was_dict:
+				works = works.values()
+			# sort
+			for sort_by in settings.sort_by:
+				if sort_by == 'name':
+					# for each work in `works` sort by `work.name`
+					works.sort(key=lambda work: work.name)
+				else:
+					try:
+						lookup = settings[sort_by + 's']
+					except KeyError:
+						print('failed to lookup/sort by', sort_by + 's')
+					else:
+						# for each work in `works` get `work.sort_by` and convert into number through look up table
+						works.sort(key=lambda work: lookup[work[sort_by]], reverse=True)
+			# if was a dict, convert it back to a dict
+			if was_dict:
+				works = {work.name: work for work in works}
+			return works
 		def generate_rowData(works: Iterable, tab: Dict):  # pylint: disable=invalid-name
 			'turns list of works into list of rows that aggrid can use and group'
 			index = 0
 			# for each work in works
 			for work in works:
 				# if work format has no links or work has no links
-				if 'links' not in work.prop or work.links == []:
+				if 'links' not in work or work.links == []:
 					# add work to rows with isVisible set to 0 if hide_works_with_no_links is true else 1
-					'work.index[tab.name] = index  # unnecessary'
 					index += 1
 					yield {**work, 'isVisible': 0 if self.settings['hide_works_with_no_links'] else 1}  # TODO: Low, do the shuffle up thing but down for works with no links, or maybe readd the disable opening rows with no children
 				else:
@@ -409,8 +413,8 @@ class GUI():  # pylint: disable=missing-class-docstring
 		cols = [{'field': 'isVisible', 'aggFunc': 'max', 'hide': True}]
 		cols += [{'field': key, 'rowGroup': True, 'hide': True} if val[1] == 'group' else {'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']} for key, val in self.settings['to_display'][tab_name].items()]  # convert into aggrid cols forma
 		cols[-1]['resizable'] = False
-		# load works from file and reference them in open_tabs
-		works = load_file(self.settings['json_files_dir'] + tab_name + '.json')
+		# load and sort works from file and reference them in open_tabs
+		works = sort(load_file(self.settings['json_files_dir'] + tab_name + '.json'), self.settings)
 		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': {work.name: work for work in works}, 'links': Dict(), 'reading': None, 'open': set()}, recursive_convert=False)
 		# generate rowData
 		tab.rows = list(generate_rowData(works, tab))
@@ -480,7 +484,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		from requests_html2 import AsyncHTMLSession
 		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
 			try:
-				if 'links' in work.prop:
+				if 'links' in work:
 					for link in work.links:  # type: ignore
 						async with self.workers:
 							# if debug tab open
@@ -714,19 +718,18 @@ formats:  # each format can have its own properties, specify name of property an
     manga: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
 to_display:  # columns to display for each Type, do not include name (it's required and auto included)
     example: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
-default_column_width: 16  # default: 16
+sort_by: [name, score]  # default: [name, score], will sort by name then score, default is currently the only working option
+check_only_first_x_links: 0  # default: 0, 0 = check all links, will only check/update first x links then hide the rest, not yet implemented
 hide_unupdated_works: true  # default: true
 hide_works_with_no_links: true  # default: true
 hide_updates_with_errors: false  # default: false
+default_column_width: 16  # default: 16
 row_height: 32  # default: 32
 disable_col_dragging: true  # default: true
 workers: 3  # default: 3
 renderers: 1  # default: 1
-sort_by: score  # default: score, score is currently only working option
-# prettier-ignore
-scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
+scores: {no Good: -1, null: 0, ok: 1, ok+: 1.1, decent: 1.5, Good-: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
 sites_ignore: []
-# prettier-ignore
 sites:  # site,         find,        with,                       then_find, and get,       split at, then get, render?
     www.royalroad.com: &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
     www.webtoons.com:  &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
@@ -792,7 +795,12 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 	# "save" formats to `Work`
 	Work.formats = Dict(settings['formats'])
 	# return settings
-	return settings
+
+	# make CommentedMap accessible with dot notation
+	settings.__getattr__ = lambda self, key: self.__getitem__(key)
+	settings.__setattr__ = lambda self, key, val: self.__setitem__(key, val)
+
+	return Dict(settings, _convert=False)
 def get_files(settings) -> list[dict[str, Any]]:
 	'returns list of files in json_files_dir that ends with .json'
 	return [{'name': file.split('.json')[0]} for file in os.listdir(settings['json_files_dir']) if file.split('.')[-1] == 'json']

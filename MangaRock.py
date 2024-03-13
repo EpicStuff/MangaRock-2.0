@@ -1,7 +1,10 @@
-# Version: 3.5.3, pylint: disable=invalid-name
-import asyncio, os
+# Version: 3.6.2, pylint: disable=invalid-name
+import asyncio
+import os
 from functools import partial as wrap
 from typing import Any, Iterable, Self
+
+from epicstuff import Dict
 
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
@@ -9,29 +12,26 @@ from nicegui.events import GenericEventArguments
 from rich.console import Console; console = Console()
 # from rich.traceback import install; install(width=os.get_terminal_size().columns)  # pylint: disable=wrong-import-position
 
-from epicstuff import Dict  # pylint: disable=wrong-import-position
 
-
-class Work():
-	''' Base Type class to be inherited by subclasses to give custom properties
-	Custom Book class Example: `class Book(Type): all = {}; prop = {'name': None, 'author': None, 'score': None, 'tags': []}`'''
-	prop: dict = {'name': None}; all: list | dict = []  # prop is short for properties, dict provided by sub object; all = list of all loaded obj/works of this class, eg = incase user wishes to iterate through all books
-	def __init__(self, *args: list, **kwargs: dict) -> None:
-		'''Applies args and kwargs to `self.__dict__` if kwarg is in `self.prop`'''
+class Work(Dict):
+	'''object representing a work, eg: a book, a series, a manga, etc.'''
+	formats: Dict
+	def __init__(self, format: str, *args: list, **kwargs: dict) -> None:  # pylint:disable=redefined-builtin
+		'''Applies args and kwargs to "`self.__dict__`" if kwarg is in `self.formats[format]`'''
+		self.format = format
+		prop = self.formats[format]  # TODO: when format of work is not in settings, handle it instead of just crashing
 		# convert args from list to dict then update them to kwargs
-		kwargs.update({tuple(self.prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in {'', None, *kwargs.values()}})
-		# if no name was provided use number as name
-		if kwargs['name'] == '': kwargs['name'] = self.__class__.all.__len__
+		kwargs.update({tuple(prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in ['', None, *kwargs.values()]})
 		# set self properties to default property values
-		self.__dict__.update(self.prop)
-		# for every kwarg, format it and update `self.__dict__` with it
+		super().__init__(prop)
+		# for every kwarg, format it and update `self` with it
 		for key, val in kwargs.items():
 			# if key of kwarg is in properties
-			if key in self.__dict__:
+			if key in self:
 				# if given val is a tuple then turn given val into a list
 				if isinstance(val, tuple): val = list(val)
 				# if given val is list and default val is not list then unlist list
-				if isinstance(val, list) and not isinstance(self.prop[key], list):
+				if isinstance(val, list) and not isinstance(prop[key], list):
 					# if multiple items in list then raise error
 					if len(val) > 1:
 						raise TypeError('unexpected multiple values within array')
@@ -39,59 +39,49 @@ class Work():
 					else:
 						val = val[0]
 				# if default val is list and given val is not list then put given val in a list
-				elif isinstance(self.prop[key], list) and not isinstance(val, list): val = [val]
+				elif isinstance(prop[key], list) and not isinstance(val, list): val = [val]
 				# if default val is int or float and given val is not float then float given val
-				if isinstance(self.prop[key], (int, float)) and not isinstance(val, (int, float)): val = float(val)
+				if isinstance(prop[key], (int, float)) and not isinstance(val, (int, float)): val = float(val)
 				# if default val is int and given val is a decimal-les (without decimals) float : convert to int
 				if isinstance(val, float) and int(val) == val:
 					val = int(val)
-				# change self property value to given kwarg value
-				self.__dict__.update({key: val})
+				# change self property value to processed given kwarg value
+				self[key] = val
+		# if no name was provided, generate a name
+		if not self.name: self.name = hash(self)
 		# if self has links then turn links into Link objects
-		if 'links' in self.prop:
+		if 'links' in prop:
 			for num, link in enumerate(self.links):  # type: ignore
 				self.links[num] = Link(link, self)  # type: ignore
 	def update(self, what='chapter', source='links'):
 		'updates `self.{what}` based on `self.{source}`, or thats the idea anyways'
 		# create list of links' latest chapters excluding errors and empty strings then get max
-		self.__dict__[what] = max([link.latest for link in self.__dict__[source] if not issubclass(link.latest.__class__, Exception) and link.latest != ''])
+		self[what] = max([link.latest for link in self[source] if not issubclass(link.latest.__class__, Exception) and link.latest != ''])
 		if what == 'chapter' and source == 'links':
 			for link in self.links:  # pylint: disable=no-member
 				link.re()
-	@classmethod
-	def sort(cls, sort_by: str = 'name', look_up_table: dict | None = None, reverse: bool = True) -> None:
-		'''sort `cls.all` by given dict, defaults to name'''
-		works = cls.all
-		# if `works` is a dict, convert it to a list
-		if works.__class__ is dict:
-			works = works.values()  # pylint: disable=no-member
-		# sort
-		if sort_by == 'name':
-			# for each work in `works` sort by `work.name`
-			works.sort(key=lambda work: work.name, reverse=reverse)
-		elif look_up_table is not None:
-			# for each work in `works` get `work.sort_by` and convert into number through look up table
-			works.sort(key=lambda work: look_up_table[work.__dict__[sort_by]], reverse=reverse)
-		# if `cls.all` is a dict, convert it back to a dict
-		if isinstance(cls.all, dict):
-			work = {work.name: work for work in works}
-		cls.all = works
-	def asdict(self) -> dict:
+	def to_dict(self) -> dict:
 		'returns `self` as a dictionary'
-		return {**{'format': self.__class__.__name__}, **{key: val for key, val in self.__dict__.items() if val not in ([], "None", None) if key != 'lChs'}}  # convert attributes to a dictionary
+		# d = {'format': self.format}
+		# for key, val in self.items():
+		# 	if val not in ([], "None", None) and key not in ('lChs', 'prop'):
+		# 		if key == 'links':
+		# 			d[key] = [link.to_dict() for link in val]
+		# 		d[key] = val
+		# return d
+		return {**{'format': self.format}, **{key: val if key != 'links' else [link.to_dict() for link in val] for key, val in self.items() if val not in ([], "None", None) if key not in ('lChs', 'prop')}}  # convert attributes to a dictionary
 	def work(self) -> Self:
 		'returns `self`'
 		return self
 	# def __iter__(self) -> object: return self  # required for to iter over for some reason
+	def __hash__(self) -> int:
+		return object().__hash__()
 	def __str__(self) -> str:
 		'returns `self` in `str` format'
-		return '<' + self.__class__.__name__ + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.__dict__.items() if key != 'name' and val != []]) + '}>'
+		return '<' + self.format + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.items() if key != 'name' and val != []]) + '}>'
 	def __repr__(self) -> str:
 		'represent `self` as `self.name` between <>'
 		return f'<{self.name}>'  # pylint: disable=no-member
-class Manga(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}  # pylint: disable=missing-class-docstring
-class Text(Work): prop = {'name': None, 'links': [], 'chapter': 0, 'series': None, 'author': None, 'score': None, 'tags': []}  # pylint: disable=missing-class-docstring
-class Series(Work): prop = {'name': None, 'links': [], 'volume': 0, 'author': None, 'score': None, 'tags': []}  # pylint: disable=missing-class-docstring
 class Link():
 	'link object, can be updated to get latest chapter'
 	def __init__(self, link: str, parent: Work) -> None:
@@ -120,7 +110,7 @@ class Link():
 		link = self.link
 		sites = sites[self.site]
 		# if tags specified in settings are in work, skip
-		if 'tags' in self.parent.prop:
+		if 'tags' in self.parent:
 			# for each tag/list of tags that are to be skipped
 			for tag in tags_to_skip:
 				# if tag is str and in work, "skip"
@@ -139,17 +129,17 @@ class Link():
 			assert link.status_code == 200  # make sure connection was successful
 		except Exception as e:  # connection error
 			print('connection error:', self.link)
-			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
+			# console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e
 			return self.re(-999.2)
 		# if site needs to be rendered, render
 		if sites[6]:
 			try:
-				print('rendering', self.link, '-', self.site)
+				# print('rendering', self.link, '-', self.site)
 				async with renderers:  # limit the number of works rendering at a time
 					# render link
 					async with link.async_render(reload=True, wait_until='networkidle'): pass
-				print('done rendering', self.link, '-', self.site)
+				# print('done rendering', self.link, '-', self.site)
 			except Exception as e:
 				print('failed to render:', self.link)  # render error
 				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
@@ -201,8 +191,8 @@ class Link():
 		try:
 			self.latest = float(re.split(sites[4], link)[sites[5]])  # else link parsing went fine: extract latest chapter from link using lookup table
 			# convert latest chapter to int if has .0
-			if float(self.latest) == self.latest:
-				self.latest = float(self.latest)
+			if int(self.latest) == self.latest:
+				self.latest = int(self.latest)
 		except Exception as e:
 			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # whatever was extracted was not a number
@@ -219,7 +209,7 @@ class Link():
 				new = self.new
 		self.new = new
 		return new
-	def asdict(self):
+	def to_dict(self):
 		'convert `self` to a string'
 		return self.link
 	def work(self) -> Work:
@@ -350,37 +340,56 @@ class GUI():  # pylint: disable=missing-class-docstring
 		'Saves all works in `Works.all` to file specified'
 		from json import dump
 		with open(self.settings['json_files_dir'] + name + '.json', 'w', encoding='utf8') as f:
-			dump(list(tab.works.values()), f, indent='\t', default=lambda work: work.asdict())
+			dump([work.to_dict() for work in tab.works.values()], f, indent='\t')
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			from json import load
-			def add_work(*args, _format: str | Work = None, **kwargs) -> Work:
-				'formats `Type` argument and returns the created object'
-				# if no `_format` is provided: look for `format` in `kwargs`
-				if _format is None:
-					assert 'format' in kwargs, 'work has no format specified'
-					_format = kwargs['format']
-				# if the format is a string, turn in into an object
-				if _format.__class__ is str:
-					_format = eval(_format)  # pylint: disable=eval-used
-				# return works object
-				return _format(*args, **kwargs)  # type: ignore
+			# def add_work(*args, _format: str = None, **kwargs) -> Work:
+			# 	'formats `Type` argument and returns the created object'
+			# 	# if no `_format` is provided: look for `format` in `kwargs`
+			# 	if _format is None:
+			# 		assert 'format' in kwargs, 'work has no format specified'
+			# 		format = kwargs.pop('format')
+			# 	# return works object
+			# 	return Work(format, *args, **kwargs)
 
 			with open(file, 'r', encoding='utf8') as f:
-				return load(f, object_hook=lambda kwargs: add_work(**kwargs))
-		def generate_rowData(works: Iterable, tab: Dict) -> list:  # pylint: disable=invalid-name
+				return load(f, object_hook=lambda kwargs: Work(**kwargs))
+		def sort(works: dict | list, settings):
+			'''sort `cls.all` by given dict, defaults to name'''
+			was_dict = works.__class__ is dict
+			# if `what` is a dict, convert it to a list
+			if was_dict:
+				works = works.values()
+			# sort
+			for sort_by in settings.sort_by:
+				if sort_by == 'name':
+					# for each work in `works` sort by `work.name`
+					works.sort(key=lambda work: work.name)
+				else:
+					try:
+						lookup = settings[sort_by + 's']
+					except KeyError:
+						print('failed to lookup/sort by', sort_by + 's')
+					else:
+						# for each work in `works` get `work.sort_by` and convert into number through look up table
+						works.sort(key=lambda work: lookup[work[sort_by]], reverse=True)
+			# if was a dict, convert it back to a dict
+			if was_dict:
+				works = {work.name: work for work in works}
+			return works
+		def generate_rowData(works: Iterable, tab: Dict):  # pylint: disable=invalid-name
 			'turns list of works into list of rows that aggrid can use and group'
 			index = 0
 			# for each work in works
 			for work in works:
 				# if work format has no links or work has no links
-				if 'links' not in work.prop or work.links == []:
+				if 'links' not in work or work.links == []:
 					# add work to rows with isVisible set to 0 if hide_works_with_no_links is true else 1
-					'work.index[tab.name] = index  # unnecessary'
 					index += 1
-					yield {**work.__dict__, 'isVisible': 0 if self.settings['hide_works_with_no_links'] else 1}  # TODO: Low, do the shuffle up thing but down for works with no links, or maybe readd the disable opening rows with no children
+					yield {**work, 'isVisible': 0 if self.settings['hide_works_with_no_links'] else 1}  # TODO: Low, do the shuffle up thing but down for works with no links, or maybe readd the disable opening rows with no children
 				else:
 					# for each link in work
 					for link in work.links:
@@ -392,7 +401,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 						link.index[tab.name] = index
 						index += 1
 						tab.links[link.link] = link
-						yield {**work.__dict__, 'links': None, 'link': link.link, 'nChs': link.new, 'isVisible': 1}
+						yield {**work, 'links': None, 'link': link.link, 'nChs': link.new, 'isVisible': 1}
 		# extract file name from event
 		tab_name = event.args['data']['name']
 		# if file already open, switch to it
@@ -404,9 +413,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 		cols = [{'field': 'isVisible', 'aggFunc': 'max', 'hide': True}]
 		cols += [{'field': key, 'rowGroup': True, 'hide': True} if val[1] == 'group' else {'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']} for key, val in self.settings['to_display'][tab_name].items()]  # convert into aggrid cols forma
 		cols[-1]['resizable'] = False
-		# load works from file and reference them in open_tabs
-		works = load_file(self.settings['json_files_dir'] + tab_name + '.json')
-		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': {work.name: work for work in works}, 'links': {}, 'reading': None, 'open': set()})
+		# load and sort works from file and reference them in open_tabs
+		works = sort(load_file(self.settings['json_files_dir'] + tab_name + '.json'), self.settings)
+		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': {work.name: work for work in works}, 'links': Dict(), 'reading': None, 'open': set()}, recursive_convert=False)
 		# generate rowData
 		tab.rows = list(generate_rowData(works, tab))
 		# create and switch to tab for file
@@ -475,7 +484,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		from requests_html2 import AsyncHTMLSession
 		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
 			try:
-				if 'links' in work.prop:
+				if 'links' in work:
 					for link in work.links:  # type: ignore
 						async with self.workers:
 							# if debug tab open
@@ -657,7 +666,11 @@ class GUI():  # pylint: disable=missing-class-docstring
 		event.sender.set_value(None)
 	async def stuff(self):
 		async def autosave():
-			import datetime, dateparser, pytimeparse
+			import datetime
+
+			import dateparser
+			import pytimeparse
+
 			# if autosave interval is not provided, disable autosave
 			if self.settings['autosave']['interval'] is None:
 				return
@@ -695,27 +708,28 @@ class GUI():  # pylint: disable=missing-class-docstring
 # pylint: disable-next=invalid-name
 default_settings = '''
 dark_mode: true  # default: true
+font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
 json_files_dir: ./  # default: ./
 tags_to_skip: [Skip, [Complete, Read]]  # works with specified tags will have update skipped and be hidden, [A, [B, C]] = A or (B and C)
 autosave:  # default: null, null = disabled, accepts reasonable inputs (eg.: 8:30 pm, 30 min)
     start: null     # when to start autosaving, does nothing if interval is null
     interval: null  # interval to autosave, starts whenever if start is null, if is single number, assumes minutes
-font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
-default_column_width: 16  # default: 16
-row_height: 32  # default: 32
-disable_col_dragging: true  # default: true
+formats:  # each format can have its own properties, specify name of property and default value, name is required (i think)
+    manga: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
 to_display:  # columns to display for each Type, do not include name (it's required and auto included)
-    example: {author: [Author, group], series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
-workers: 3  # default: 3
-renderers: 1  # default: 1
+    example: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+sort_by: [name, score]  # default: [name, score], will sort by name then score, default is currently the only working option
+check_only_first_x_links: 0  # default: 0, 0 = check all links, will only check/update first x links then hide the rest, not yet implemented
 hide_unupdated_works: true  # default: true
 hide_works_with_no_links: true  # default: true
 hide_updates_with_errors: false  # default: false
-sort_by: score  # default: score, score is currently only working option
-# prettier-ignore
-scores: {no Good: -1, None: 0, ok: 1, ok+: 1.1, decent: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
+default_column_width: 16  # default: 16
+row_height: 32  # default: 32
+disable_col_dragging: true  # default: true
+workers: 3  # default: 3
+renderers: 1  # default: 1
+scores: {no Good: -1, null: 0, ok: 1, ok+: 1.1, decent: 1.5, Good-: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
 sites_ignore: []
-# prettier-ignore
 sites:  # site,         find,        with,                       then_find, and get,       split at, then get, render?
     www.royalroad.com: &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
     www.webtoons.com:  &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
@@ -776,7 +790,17 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 	try: file = open(settings_file, 'r', encoding='utf8'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
 	except FileNotFoundError: print('settings file not found, creating new settings file')
 	with open(settings_file, 'w', encoding='utf8') as file: yaml.dump(settings, file)  # save settings to settings_file
-	format_sites(settings_file); return settings  # format settings_file 'sites:' part then return settings
+	format_sites(settings_file);   # format settings_file 'sites:' part
+
+	# "save" formats to `Work`
+	Work.formats = Dict(settings['formats'])
+	# return settings
+
+	# make CommentedMap accessible with dot notation
+	settings.__getattr__ = lambda self, key: self.__getitem__(key)
+	settings.__setattr__ = lambda self, key, val: self.__setitem__(key, val)
+
+	return Dict(settings, _convert=False)
 def get_files(settings) -> list[dict[str, Any]]:
 	'returns list of files in json_files_dir that ends with .json'
 	return [{'name': file.split('.json')[0]} for file in os.listdir(settings['json_files_dir']) if file.split('.')[-1] == 'json']

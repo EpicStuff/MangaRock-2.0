@@ -322,7 +322,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			# determine visibility
 			row['isVisible'] = int(not (
 				new_chapters == 0 and self.settings['hide_unupdated_works'] or  # hide if no new chapters and hide_unupdated_works or
-				int(new_chapters) == -999 and self.settings['hide_updates_with_errors']  # hide if new_chapters is error and hide_updates_with_errors
+				int(new_chapters) == -999 and self.settings['hide_errored_updates']  # hide if new_chapters is error and hide_errored_updates
 			))
 		if current_chapter is not None: row['chapter'] = current_chapter  # if current chapter was provided
 		# code to update "client side" data
@@ -634,9 +634,12 @@ class GUI():  # pylint: disable=missing-class-docstring
 					print(eval(entry[1:], globals(), locals()))  # pylint: disable=eval-used
 				except Exception:  # pylint: disable=broad-exception-caught
 					try:
-						print(exec(entry, globals(), locals()))  # pylint: disable=exec-used
-					except Exception as e:  # pylint: disable=broad-exception-caught
-						print(e)  # pylint: disable=eval-used
+						print(exec(entry[1:], globals(), locals()))  # pylint: disable=exec-used
+					except Exception:  # pylint: disable=broad-exception-caught
+						console.print_exception(width=os.get_terminal_size().columns)
+						print(entry)
+
+						# print(e)  # pylint: disable=eval-used
 		# if is not a command
 		# if reading
 		elif tab.reading:
@@ -722,7 +725,7 @@ sort_by: [name, score]  # default: [name, score], will sort by name then score, 
 check_only_first_x_links: 0  # default: 0, 0 = check all links, will only check/update first x links then hide the rest, not yet implemented
 hide_unupdated_works: true  # default: true
 hide_works_with_no_links: true  # default: true
-hide_updates_with_errors: false  # default: false
+hide_errored_updates: false  # default: false
 default_column_width: 16  # default: 16
 row_height: 32  # default: 32
 disable_col_dragging: true  # default: true
@@ -786,21 +789,25 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 		with open(settings_file, 'w', encoding='utf8') as f: f.writelines(file)  # write file to settings_file
 
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
-	settings = yaml.load(_default_settings.replace('\t', ''))  # set default_settings
-	try: file = open(settings_file, 'r', encoding='utf8'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
-	except FileNotFoundError: print('settings file not found, creating new settings file')
-	with open(settings_file, 'w', encoding='utf8') as file: yaml.dump(settings, file)  # save settings to settings_file
+	settings = Dict(yaml.load(_default_settings.replace('\t', '')), _convert=False)  # set default_settings
+	try:
+		with open(settings_file, 'r', encoding='utf8') as file:
+			settings.update(yaml.load(file))
+	except FileNotFoundError:
+		print('settings file not found, creating new settings file')
+
+	# "fix" json_files_dir if necessary
+	if settings.json_files_dir[-1] != '/': settings.json_files_dir += '/'
+
+	with open(settings_file, 'w', encoding='utf8') as file:
+		yaml.dump(settings._t, file)  # save settings to settings_file
 	format_sites(settings_file);   # format settings_file 'sites:' part
 
 	# "save" formats to `Work`
-	Work.formats = Dict(settings['formats'])
+	Work.formats = Dict(settings.formats)
 	# return settings
 
-	# make CommentedMap accessible with dot notation
-	settings.__getattr__ = lambda self, key: self.__getitem__(key)
-	settings.__setattr__ = lambda self, key, val: self.__setitem__(key, val)
-
-	return Dict(settings, _convert=False)
+	return settings
 def get_files(settings) -> list[dict[str, Any]]:
 	'returns list of files in json_files_dir that ends with .json'
 	return [{'name': file.split('.json')[0]} for file in os.listdir(settings['json_files_dir']) if file.split('.')[-1] == 'json']

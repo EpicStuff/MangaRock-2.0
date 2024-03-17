@@ -1,4 +1,4 @@
-# Version: 3.7.0, pylint: disable=invalid-name
+# Version: 3.7.1, pylint: disable=invalid-name
 import asyncio, os
 from functools import partial as wrap
 from typing import Any, Iterable, Self
@@ -252,7 +252,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		self.open_tabs = Dict({'Main': Dict({'name': 'Main'})})
 		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/save': 'save all works in tab', '/reupdate': 'reupdate all works in tab', '/reload': 'close and reopen tab (without saving)', '/refresh': 'redraw table, Deprecated: just reload instead', '/close': 'close current tab (without saving)', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
 		# create tab holder with main tab
-		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs:
+		with ui.tabs().props('dense') as self.tabs:
 			tab = ui.tab('Main')
 		# create panel holder
 		with ui.tab_panels(self.tabs, value=tab) as self.panels:
@@ -290,7 +290,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		'opens debug tab'
 		# if debug tab is already open, switch to it
 		if 'debug' in self.open_tabs:
-			self.switch_tab(Dict({'args': 'Debug'}))
+			self.tabs.set_value('Debug')
 			return
 		# else create tab
 		self.open_tabs.debug = Dict()
@@ -303,7 +303,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 					self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
 					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
 		# switch to tab
-		self.switch_tab(Dict({'args': 'Debug'}))
+		self.tabs.set_value('Debug')
 	def _jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
 		'upgrade aggrid from community to enterprise'
 		from pathlib import Path
@@ -324,10 +324,6 @@ class GUI():  # pylint: disable=missing-class-docstring
 		grid.libraries[0] = self.library
 		# return grid
 		return grid
-	def switch_tab(self, event: GenericEventArguments | Dict) -> None:
-		'switch to tab indicated by event'
-		self.tabs.props(f"model-value={event.args}")
-		self.panels.props(f"model-value={event.args}")
 	def close_tab(self, tab_name: str) -> None:
 		'closes indicated tab'
 		# get tab
@@ -339,7 +335,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		tab.tab.delete()
 		# switch to main tab
 		del self.open_tabs[tab_name]
-		self.switch_tab(Dict({'args': 'Main'}))
+		self.tabs.set_value('Main')
 	def update_row(self, tab: Dict, link: Link, new_chapters: float = None, current_chapter: float = None) -> None:
 		'updates row with new chapter count'
 		row = tab.rows[link.index[tab.name]]
@@ -349,7 +345,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			# determine visibility
 			row['isVisible'] = int(not (
 				new_chapters == 0 and self.settings['hide_unupdated_works'] or  # hide if no new chapters and hide_unupdated_works or
-				int(new_chapters) == -999 and self.settings['hide_updates_with_errors']  # hide if new_chapters is error and hide_updates_with_errors
+				int(new_chapters) == -999 and self.settings['hide_errored_updates']  # hide if new_chapters is error and hide_updates_with_errors
 			))
 		if current_chapter is not None: row['chapter'] = current_chapter  # if current chapter was provided
 		# code to update "client side" data
@@ -365,31 +361,64 @@ class GUI():  # pylint: disable=missing-class-docstring
 			ui.run_javascript(js + '\ngrid.applyTransaction({update: [node]})')
 	async def button_pressed(self):
 		'runs when the button in opened file tab is pressed'
-		name = self.tabs._props['model-value']  # pylint: disable=protected-access
+		# name = self.tabs._props['model-value']  # pylint: disable=protected-access
+		name = self.tabs.value
 		tab = self.open_tabs[name]
 		# get selected work, if any
 		selected = await tab.grid.get_selected_row() or await ui.run_javascript(f'return getElement({tab.grid.id}).gridOptions.api.getSelectedNodes()[0].groupData')
-		print(list(selected.values())[0])
 		# if no work is selected, do nothing
 		if not selected:
 			print('no work selected')
 		else:
 			self.edit_work(tab.works[list(selected.values())[0]])
 	def edit_work(self, work):
+		'opens new tab to allow for editing a work\'s properties'
+		def apply(inputs, work):
+			'applies changes to work'
+			# for each one of work's properties
+			for key, val in work.items():
+				# if key is 'links'
+				if key == 'links':
+					# set work's links to list of links from textarea
+					work.links = [Link(link, work) for link in inputs.links.value.split('\n')]  # TODO: make sure that the old links got deleted/garbage collected and aren't just floating around somewhere
+				elif val.__class__ is list:
+					# set work's property to list from textarea
+					work[key] = inputs[key].value.split('\n')
+				else:
+					# set work's property to value from input
+					work[key] = inputs[key].value
 		# if file already open, switch to it
 		if work.name in self.open_tabs:
-			self.switch_tab(Dict({'args': work.name}))
+			self.tabs.set_value(work.name)
 			return
-		# maybe unnecessary
-		tab = self.open_tabs[work.name] = Dict({'name': work.name})
+		# create Dict for edit work tab and store in open_tabs
+		self.open_tabs[work.name] = Dict({'name': work.name})
 		# create and switch to tab for file
 		with self.tabs:
-			tab.tab = ui.tab(work.name)
-		self.switch_tab(Dict({'args': work.name}))
+			tmp = ui.tab(work.name)
+		self.tabs.set_value(work.name)
 		# create panel for file
 		with self.panels:
-			with ui.tab_panel(work.name).style(GUI.styles.tab_panel) as tab.panel:
-				tab.label = ui.label(f'Editing: {work.name}')
+			with ui.tab_panel(tmp).style(GUI.styles.tab_panel):
+				ui.label(f'Editing: {work.name}')
+				# list to store inputs
+				inputs = Dict()
+				# for each one of work's properties
+				for key, val in work.items():
+					# if key is not 'links'
+					with ui.row().classes('w-full'):
+						# ui.label(key)
+						if key == 'links':
+							inputs[key] = ui.textarea(key.title(), value='\n'.join([link.to_dict() for link in val])).classes('w-full')
+						elif val.__class__ is list:
+							inputs[key] = ui.textarea(key.title(), value='\n'.join(val)).classes('w-full')
+						else:
+							inputs[key] = ui.input(key.title(), value=val).classes('w-full')
+				# create buttons to close or apply tab
+				with ui.row().classes('w-full'):
+					ui.button('Close', on_click=wrap(self.close_tab, work.name)).props('square')
+					ui.button('Apply', on_click=wrap(apply, inputs, work)).props('square')
+
 	def save_tab(self, tab, name) -> None:
 		'Saves all works in `Works.all` to file specified'
 		from json import dump
@@ -460,7 +489,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		tab_name = event.args['data']['name']
 		# if file already open, switch to it
 		if tab_name in self.open_tabs:
-			self.switch_tab(Dict({'args': tab_name}))
+			self.tabs.set_value(tab_name)
 			return
 		# get columns to display
 		assert tab_name in self.settings['to_display'], 'Columns for ' + tab_name + ' has not been specified in settings.yaml'  # make sure columns for file has been specified in settings, TODO: do something instead of crash
@@ -477,11 +506,11 @@ class GUI():  # pylint: disable=missing-class-docstring
 			'open': set()
 		}, recursive_convert=False)
 		# generate rowData
-		tab.rows = list(generate_rowData(self.open_tabs[tab_name].works, tab))
+		tab.rows = list(generate_rowData(works, tab))
 		# create and switch to tab for file
 		with self.tabs:
 			tab.tab = ui.tab(tab_name)
-		self.switch_tab(Dict({'args': tab_name}))
+		self.tabs.set_value(tab_name)
 		# create panel for file
 		with self.panels:
 			with ui.tab_panel(tab_name).style(GUI.styles.tab_panel) as tab.panel:
@@ -695,9 +724,10 @@ class GUI():  # pylint: disable=missing-class-docstring
 					print(eval(entry[1:], globals(), locals()))  # pylint: disable=eval-used
 				except Exception:  # pylint: disable=broad-exception-caught
 					try:
-						exec(entry, globals(), locals())  # pylint: disable=exec-used
+						print(exec(entry[1:], globals(), locals()))  # pylint: disable=exec-used
 					except Exception:  # pylint: disable=broad-exception-caught
-						console.print_exception(show_locals=True, width=os.get_terminal_size().columns)  # pylint: disable=eval-used
+						console.print_exception(width=os.get_terminal_size().columns)
+						print(entry)
 		# if is not a command
 		# if reading
 		elif tab.reading:
@@ -769,17 +799,19 @@ font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
 json_files_dir: ./  # default: ./
 tags_to_skip: [Skip, [Complete, Read]]  # works with specified tags will have update skipped and be hidden, [A, [B, C]] = A or (B and C)
 autosave:  # default: null, null = disabled, accepts reasonable inputs (eg.: 8:30 pm, 30 min)
-    start: null     # when to start autosaving, does nothing if interval is null
-    interval: null  # interval to autosave, starts whenever if start is null, if is single number, assumes minutes
+	start: null     # when to start autosaving, does nothing if interval is null
+	interval: null  # interval to autosave, starts whenever if start is null, if is single number, assumes minutes
 formats:  # each format can have its own properties, specify name of property and default value, name is required (i think)
-    manga: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
+    Manga: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
+    Text: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
+    Series: {name: null, links: [], volume: 0, author: null, score: null, tags: []}
 to_display:  # columns to display for each Type, do not include name (it's required and auto included)
-    example: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+	example: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
 sort_by: [name, score]  # default: [name, score], will sort by name then score, default is currently the only working option
 check_only_first_x_links: 0  # default: 0, 0 = check all links, will only check/update first x links then hide the rest, not yet implemented
 hide_unupdated_works: true  # default: true
 hide_works_with_no_links: true  # default: true
-hide_updates_with_errors: false  # default: false
+hide_errored_updates: false  # default: false
 default_column_width: 16  # default: 16
 row_height: 32  # default: 32
 disable_col_dragging: true  # default: true
@@ -788,23 +820,23 @@ renderers: 1  # default: 1
 scores: {no Good: -1, null: 0, ok: 1, ok+: 1.1, decent: 1.5, Good-: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
 sites_ignore: []
 sites:  # site,         find,        with,                       then_find, and get,       split at, then get, render?
-    www.royalroad.com: &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
-    www.webtoons.com:  &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
-    bato.to:           &003 [item,  null,                       title,     null,          ' ',      -1,       false]
-    mangafire.to:      &004 [div,   class: list-body,           li,        data-number,   ' ',      0,        false]
-    mangabuddy.com:    &005 [div,   class: latest-chapters,     a,         href,          '-',      -1,       false]
-    www.mgeko.com:     &006 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
-    zahard.xyz:        &007 [ul,    class: chapters,            a,         href,          /,        -1,       false]
-    manganato.com:     &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
-    reaper-scans.com:  &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
-    manhuaplus.com:    &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
-    mangadex.org:      &011 [div,   class: text-center,         null,      null,          -|\\.,     -1,       true]
+	www.royalroad.com: &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
+	www.webtoons.com:  &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
+	bato.to:           &003 [item,  null,                       title,     null,          ' ',      -1,       false]
+	mangafire.to:      &004 [div,   class: list-body,           li,        data-number,   ' ',      0,        false]
+	mangabuddy.com:    &005 [div,   class: latest-chapters,     a,         href,          '-',      -1,       false]
+	www.mgeko.com:     &006 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+	zahard.xyz:        &007 [ul,    class: chapters,            a,         href,          /,        -1,       false]
+	manganato.com:     &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
+	reaper-scans.com:  &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+	manhuaplus.com:    &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
+	mangadex.org:      &011 [div,   class: text-center,         null,      null,          -|\\.,     -1,       true]
 	wattpad.com:       &012 [./plugins/wattpad.py, main]
-    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]  # for aligning reasons
-    www.mcreader.net:  *006
-    www.mangageko.com: *006
-    chapmanganato.com: *008
-    readmanganato.com: *008
+	null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]  # for aligning reasons
+	www.mcreader.net:  *006
+	www.mangageko.com: *006
+	chapmanganato.com: *008
+	readmanganato.com: *008
 '''
 def main(name: str, *args, _dir: str | None = None, settings_file='settings.yaml') -> None:  # pylint: disable=unused-argument
 	'Main function'
@@ -844,17 +876,21 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 		with open(settings_file, 'w', encoding='utf8') as f: f.writelines(file)  # write file to settings_file
 
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
-	settings = yaml.load(_default_settings.replace('\t', ''))  # set default_settings
-	try: file = open(settings_file, 'r', encoding='utf8'); settings.update(yaml.load(file)); file.close()  # try to overwrite the default settings from the settings_file
-	except FileNotFoundError: print('settings file not found, creating new settings file')
-	with open(settings_file, 'w', encoding='utf8') as file: yaml.dump(settings, file)  # save settings to settings_file
+	settings = Dict(yaml.load(_default_settings.replace('\t', '    ')), _convert=False)  # set default_settings
+	try:
+		with open(settings_file, 'r', encoding='utf8') as file:
+			settings.update(yaml.load(file))
+	except FileNotFoundError:
+		print('settings file not found, creating new settings file')
+	# "fix" json_files_dir if necessary
+	if settings.json_files_dir[-1] != '/': settings.json_files_dir += '/'
+	with open(settings_file, 'w', encoding='utf8') as file:
+		yaml.dump(settings._t, file)  # save settings to settings_file
 	format_sites(settings_file);   # format settings_file 'sites:' part
-
 	# "save" formats to `Work`
-	Work.formats = Dict(settings['formats'])
-
+	Work.formats = Dict(settings.formats)
 	# return settings
-	return Dict(settings, _convert=False)
+	return settings
 def get_files(settings) -> list[dict[str, Any]]:
 	'returns list of files in json_files_dir that ends with .json'
 	return [{'name': file.split('.json')[0]} for file in os.listdir(settings['json_files_dir']) if file.split('.')[-1] == 'json']

@@ -9,7 +9,7 @@ from nicegui import app, ui
 from nicegui.events import GenericEventArguments
 
 from rich.console import Console; console = Console()
-from rich.traceback import install; install(width=os.get_terminal_size().columns)  # pylint: disable=wrong-import-position
+from rich.traceback import install; install(width=os.get_terminal_size().columns)
 
 
 class Work(Dict):
@@ -18,63 +18,81 @@ class Work(Dict):
 	def __init__(self, format: str, *args: list, **kwargs: dict) -> None:  # pylint:disable=redefined-builtin
 		'''Applies args and kwargs to "`self.__dict__`" if kwarg is in `self.formats[format]`'''
 		self.format = format
-		prop = self.formats[format]  # TODO: when format of work is not in settings, handle it instead of just crashing
+		props = self.formats[format]  # TODO: when format of work is not in settings, handle it instead of just crashing
 		# convert args from list to dict then update them to kwargs
-		kwargs.update({tuple(prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in ['', None, *kwargs.values()]})
+		kwargs.update({tuple(props.keys())[num]: arg for num, arg in enumerate(args) if arg not in ['', None, *kwargs.values()]})
 		# set self properties to default property values
-		super().__init__(prop)
+		super().__init__(props, recursive_convert=False)  # pylint: disable=unexpected-keyword-arg
 		# for every kwarg, format it and update `self` with it
 		for key, val in kwargs.items():
-			# if key of kwarg is in properties
 			if key in self:
-				# if given val is a tuple then turn given val into a list
-				if isinstance(val, tuple): val = list(val)
-				# if given val is list and default val is not list then unlist list
-				if isinstance(val, list) and not isinstance(prop[key], list):
-					# if multiple items in list then raise error
-					if len(val) > 1:
-						raise TypeError('unexpected multiple values within array')
-					# else unlist list
-					else:
-						val = val[0]
-				# if default val is list and given val is not list then put given val in a list
-				elif isinstance(prop[key], list) and not isinstance(val, list): val = [val]
-				# if default val is int or float and given val is not float then float given val
-				if isinstance(prop[key], (int, float)) and not isinstance(val, (int, float)): val = float(val)
-				# if default val is int and given val is a decimal-les (without decimals) float : convert to int
-				if isinstance(val, float) and int(val) == val:
-					val = int(val)
-				# change self property value to processed given kwarg value
 				self[key] = val
 		# if no name was provided, generate a name
-		if not self.name: self.name = hash(self)
-		# if self has links then turn links into Link objects
-		if 'links' in prop:
-			for num, link in enumerate(self.links):  # type: ignore
-				self.links[num] = Link(link, self)  # type: ignore
-	def update(self, what='chapter', source='links'):
-		'updates `self.{what}` based on `self.{source}`, or thats the idea anyways'
+		if self.name is None: self.name = str(id(self))
+	def convert(self, value, key, ignore__convert=None) -> Any:  # pylint: disable=unused-argument
+		# if is format, do nothing
+		if key == 'format':
+			pass
+		# if is link, turn links into Link objects
+		elif key == 'links':
+			# if only 1 link given (in the form of a str), convert to list
+			if value.__class__ is str:
+				value = [value]
+			value = [Link(link, self) for link in value]
+		else:
+			props = self.formats[self.format]
+			# if given val is a tuple then turn given val into a list
+			if isinstance(value, tuple): value = list(value)
+			# if given val is list and default val is not list then unlist list
+			if isinstance(value, list) and not isinstance(props[key], list):
+				# if multiple items in list then raise error
+				if len(value) > 1:
+					raise TypeError('unexpected multiple values within array')
+				# else unlist list
+				else:
+					value = value[0]
+			# if default val is list and given val is not list then put given val in a list
+			elif isinstance(props[key], list) and not isinstance(value, list): value = [value]
+			# if default val is int or float and given val is not float then float given val
+			if isinstance(props[key], (int, float)) and not isinstance(value, (int, float)): value = float(value)
+			# if default val is int and given val is a decimal-les (without decimals) float : convert to int
+			if isinstance(value, float) and int(value) == value:
+				value = int(value)
+		# return converted value
+		return value
+	def re(self):
+		'why is this called re? no idea'
 		# create list of links' latest chapters excluding errors and empty strings then get max
-		self[what] = max([link.latest for link in self[source] if not issubclass(link.latest.__class__, Exception) and link.latest != ''])
-		if what == 'chapter' and source == 'links':
-			for link in self.links:  # pylint: disable=no-member
-				link.re()
+		self.chapter = max([link.latest for link in self.links if not issubclass(link.latest.__class__, Exception) and link.latest != ''])
+		# update new chapters for each link
+		for link in self.links:  # pylint: disable=no-member
+			link.re()
 	def to_dict(self) -> dict:
 		'returns `self` as a dictionary'
 		# d = {'format': self.format}
 		# for key, val in self.items():
-		# 	if val not in ([], "None", None) and key not in ('lChs', 'prop'):
-		# 		if key == 'links':
-		# 			d[key] = [link.to_dict() for link in val]
+		# 	if val in ([], "None", None):
+		# 		continue
+		# 	if key in ('lChs', 'prop'):
+		# 		continue
+		# 	if key == 'name' and val == str(id(self)):
+		# 		continue
+		# 	if key == 'links':
+		# 		d[key] = [link.to_dict() for link in val]
+		# 	else:
 		# 		d[key] = val
 		# return d
-		return {**{'format': self.format}, **{key: val if key != 'links' else [link.to_dict() for link in val] for key, val in self.items() if val not in ([], "None", None) if key not in ('lChs', 'prop')}}  # convert attributes to a dictionary
+		return {
+			**{'format': self.format},
+			**{key: val if key != 'links' else [link.to_dict() for link in val] for key, val in self.items()
+                            if val not in ([], "None", None)
+                            if key not in ('lChs', 'prop')
+                            if not (key == 'name' and val == str(id(self)))
+      }
+		}  # convert attributes to a dictionary
 	def work(self) -> Self:
 		'returns `self`'
 		return self
-	# def __iter__(self) -> object: return self  # required for to iter over for some reason
-	def __hash__(self) -> int:
-		return object().__hash__()
 	def __str__(self) -> str:
 		'returns `self` in `str` format'
 		return '<' + self.format + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.items() if key != 'name' and val != []]) + '}>'
@@ -84,6 +102,7 @@ class Work(Dict):
 class Link():
 	'link object, can be updated to get latest chapter'
 	def __init__(self, link: str, parent: Work) -> None:
+		if not link.startswith('http'): link = 'https://' + link
 		self.site = link.split('/')[2]
 		self.link = link
 		self.parent = parent
@@ -328,14 +347,14 @@ class GUI():  # pylint: disable=missing-class-docstring
 		'closes indicated tab'
 		# get tab
 		tab = self.open_tabs[tab_name]
-		# cancel updating works in tab
-		tab.tasks.cancel()
+		# cancel updating works in tab (if tab has tasks)
+		if 'tasks' in tab: tab.tasks.cancel()
 		# delete stuff
 		tab.panel.delete()
 		tab.tab.delete()
-		# switch to main tab
 		del self.open_tabs[tab_name]
-		self.tabs.set_value('Main')
+		# switch to main tab
+		self.tabs.set_value('Main')  # TODO: low, switch to last tab instead of main
 	def update_row(self, tab: Dict, link: Link, new_chapters: float = None, current_chapter: float = None) -> None:
 		'updates row with new chapter count'
 		row = tab.rows[link.index[tab.name]]
@@ -375,31 +394,25 @@ class GUI():  # pylint: disable=missing-class-docstring
 		'opens new tab to allow for editing a work\'s properties'
 		def apply(inputs, work):
 			'applies changes to work'
-			# for each one of work's properties
-			for key, val in work.items():
-				# if key is 'links'
-				if key == 'links':
-					# set work's links to list of links from textarea
-					work.links = [Link(link, work) for link in inputs.links.value.split('\n')]  # TODO: make sure that the old links got deleted/garbage collected and aren't just floating around somewhere
-				elif val.__class__ is list:
-					# set work's property to list from textarea
-					work[key] = inputs[key].value.split('\n')
+			for key, val in inputs.items():
+				if val.__class__ is ui.textarea:
+					work[key] = val.value.split('\n')
 				else:
-					# set work's property to value from input
-					work[key] = inputs[key].value
+					work[key] = val.value
+			# TODO: make sure that the old links got deleted/garbage collected and aren't just floating around somewhere
 		# if file already open, switch to it
 		if work.name in self.open_tabs:
 			self.tabs.set_value(work.name)
 			return
 		# create Dict for edit work tab and store in open_tabs
-		self.open_tabs[work.name] = Dict({'name': work.name})
+		tab = self.open_tabs[work.name] = Dict({'name': work.name})
 		# create and switch to tab for file
 		with self.tabs:
-			tmp = ui.tab(work.name)
+			tab.tab = ui.tab(work.name)
 		self.tabs.set_value(work.name)
 		# create panel for file
 		with self.panels:
-			with ui.tab_panel(tmp).style(GUI.styles.tab_panel):
+			with ui.tab_panel(tab.tab).style(GUI.styles.tab_panel) as tab.panel:
 				ui.label(f'Editing: {work.name}')
 				# list to store inputs
 				inputs = Dict()
@@ -625,7 +638,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 				if work == tab.reading or tab.reading in work.links:
 					# set work's chapter to latest chapter
 					try:
-						work.update()
+						work.re()
 					except (ValueError, TypeError):
 						print('work has not been updated yet')
 						return
@@ -689,7 +702,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 				await self.update_all(tab)
 			# if is refresh command: re"draw" grid
 			elif entry == '/refresh':
-				tab.grid.update()
+				# tab.grid.options['rowData'] =
+				# tab.grid.update()
+				pass  # TODO: update every row using javascript instead of tab.grid.update() so that it doesn't reset stuff
 			# if is reload: re load file
 			elif entry == '/reload':
 				if name == 'Main':

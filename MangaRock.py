@@ -718,7 +718,9 @@ autosave:  # default: null, null = disabled, accepts reasonable inputs (eg.: 8:3
     start: null     # when to start autosaving, does nothing if interval is null
     interval: null  # interval to autosave, starts whenever if start is null, if is single number, assumes minutes
 formats:  # each format can have its own properties, specify name of property and default value, name is required (i think)
-    manga: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
+    Manga: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
+    Text: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
+    Series: {name: null, links: [], volume: 0, author: null, score: null, tags: []}
 to_display:  # columns to display for each Type, do not include name (it's required and auto included)
     example: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
 sort_by: [name, score]  # default: [name, score], will sort by name then score, default is currently the only working option
@@ -805,8 +807,8 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 
 	# "save" formats to `Work`
 	Work.formats = Dict(settings.formats)
-	# return settings
 
+	# return settings
 	return settings
 def get_files(settings) -> list[dict[str, Any]]:
 	'returns list of files in json_files_dir that ends with .json'

@@ -1,6 +1,5 @@
-# Version: 3.6.2, pylint: disable=invalid-name
-import asyncio
-import os
+# Version: 3.7.1, pylint: disable=invalid-name
+import asyncio, os
 from functools import partial as wrap
 from typing import Any, Iterable, Self
 
@@ -10,7 +9,7 @@ from nicegui import app, ui
 from nicegui.events import GenericEventArguments
 
 from rich.console import Console; console = Console()
-# from rich.traceback import install; install(width=os.get_terminal_size().columns)  # pylint: disable=wrong-import-position
+# from rich.traceback import install; install(width=os.get_terminal_size().columns)
 
 
 class Work(Dict):
@@ -19,63 +18,81 @@ class Work(Dict):
 	def __init__(self, format: str, *args: list, **kwargs: dict) -> None:  # pylint:disable=redefined-builtin
 		'''Applies args and kwargs to "`self.__dict__`" if kwarg is in `self.formats[format]`'''
 		self.format = format
-		prop = self.formats[format]  # TODO: when format of work is not in settings, handle it instead of just crashing
+		props = self.formats[format]  # TODO: when format of work is not in settings, handle it instead of just crashing
 		# convert args from list to dict then update them to kwargs
-		kwargs.update({tuple(prop.keys())[num]: arg for num, arg in enumerate(args) if arg not in ['', None, *kwargs.values()]})
+		kwargs.update({tuple(props.keys())[num]: arg for num, arg in enumerate(args) if arg not in ['', None, *kwargs.values()]})
 		# set self properties to default property values
-		super().__init__(prop)
+		super().__init__(props, recursive_convert=False)  # pylint: disable=unexpected-keyword-arg
 		# for every kwarg, format it and update `self` with it
 		for key, val in kwargs.items():
-			# if key of kwarg is in properties
 			if key in self:
-				# if given val is a tuple then turn given val into a list
-				if isinstance(val, tuple): val = list(val)
-				# if given val is list and default val is not list then unlist list
-				if isinstance(val, list) and not isinstance(prop[key], list):
-					# if multiple items in list then raise error
-					if len(val) > 1:
-						raise TypeError('unexpected multiple values within array')
-					# else unlist list
-					else:
-						val = val[0]
-				# if default val is list and given val is not list then put given val in a list
-				elif isinstance(prop[key], list) and not isinstance(val, list): val = [val]
-				# if default val is int or float and given val is not float then float given val
-				if isinstance(prop[key], (int, float)) and not isinstance(val, (int, float)): val = float(val)
-				# if default val is int and given val is a decimal-les (without decimals) float : convert to int
-				if isinstance(val, float) and int(val) == val:
-					val = int(val)
-				# change self property value to processed given kwarg value
 				self[key] = val
 		# if no name was provided, generate a name
-		if not self.name: self.name = hash(self)
-		# if self has links then turn links into Link objects
-		if 'links' in prop:
-			for num, link in enumerate(self.links):  # type: ignore
-				self.links[num] = Link(link, self)  # type: ignore
-	def update(self, what='chapter', source='links'):
-		'updates `self.{what}` based on `self.{source}`, or thats the idea anyways'
+		if self.name is None: self.name = str(id(self))
+	def convert(self, value, key, ignore__convert=None) -> Any:  # pylint: disable=unused-argument
+		# if is format, do nothing
+		if key == 'format':
+			pass
+		# if is link, turn links into Link objects
+		elif key == 'links':
+			# if only 1 link given (in the form of a str), convert to list
+			if value.__class__ is str:
+				value = [value]
+			value = [Link(link, self) for link in value]
+		else:
+			props = self.formats[self.format]
+			# if given val is a tuple then turn given val into a list
+			if isinstance(value, tuple): value = list(value)
+			# if given val is list and default val is not list then unlist list
+			if isinstance(value, list) and not isinstance(props[key], list):
+				# if multiple items in list then raise error
+				if len(value) > 1:
+					raise TypeError('unexpected multiple values within array')
+				# else unlist list
+				else:
+					value = value[0]
+			# if default val is list and given val is not list then put given val in a list
+			elif isinstance(props[key], list) and not isinstance(value, list): value = [value]
+			# if default val is int or float and given val is not float then float given val
+			if isinstance(props[key], (int, float)) and not isinstance(value, (int, float)): value = float(value)
+			# if default val is int and given val is a decimal-les (without decimals) float : convert to int
+			if isinstance(value, float) and int(value) == value:
+				value = int(value)
+		# return converted value
+		return value
+	def re(self):
+		'why is this called re? no idea'
 		# create list of links' latest chapters excluding errors and empty strings then get max
-		self[what] = max([link.latest for link in self[source] if not issubclass(link.latest.__class__, Exception) and link.latest != ''])
-		if what == 'chapter' and source == 'links':
-			for link in self.links:  # pylint: disable=no-member
-				link.re()
+		self.chapter = max([link.latest for link in self.links if not issubclass(link.latest.__class__, Exception) and link.latest != ''])
+		# update new chapters for each link
+		for link in self.links:  # pylint: disable=no-member
+			link.re()
 	def to_dict(self) -> dict:
 		'returns `self` as a dictionary'
 		# d = {'format': self.format}
 		# for key, val in self.items():
-		# 	if val not in ([], "None", None) and key not in ('lChs', 'prop'):
-		# 		if key == 'links':
-		# 			d[key] = [link.to_dict() for link in val]
+		# 	if val in ([], "None", None):
+		# 		continue
+		# 	if key in ('lChs', 'prop'):
+		# 		continue
+		# 	if key == 'name' and val == str(id(self)):
+		# 		continue
+		# 	if key == 'links':
+		# 		d[key] = [link.to_dict() for link in val]
+		# 	else:
 		# 		d[key] = val
 		# return d
-		return {**{'format': self.format}, **{key: val if key != 'links' else [link.to_dict() for link in val] for key, val in self.items() if val not in ([], "None", None) if key not in ('lChs', 'prop')}}  # convert attributes to a dictionary
+		return {
+			**{'format': self.format},
+			**{key: val if key != 'links' else [link.to_dict() for link in val] for key, val in self.items()
+                            if val not in ([], "None", None)
+                            if key not in ('lChs', 'prop')
+                            if not (key == 'name' and val == str(id(self)))
+      }
+		}  # convert attributes to a dictionary
 	def work(self) -> Self:
 		'returns `self`'
 		return self
-	# def __iter__(self) -> object: return self  # required for to iter over for some reason
-	def __hash__(self) -> int:
-		return object().__hash__()
 	def __str__(self) -> str:
 		'returns `self` in `str` format'
 		return '<' + self.format + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.items() if key != 'name' and val != []]) + '}>'
@@ -85,6 +102,7 @@ class Work(Dict):
 class Link():
 	'link object, can be updated to get latest chapter'
 	def __init__(self, link: str, parent: Work) -> None:
+		if not link.startswith('http'): link = 'https://' + link
 		self.site = link.split('/')[2]
 		self.link = link
 		self.parent = parent
@@ -97,12 +115,14 @@ class Link():
 			-999.2 = Connection Error
 			-999.3 = rendering error, probably timeout
 			-999.4 = parsing error
-			-999.5 = whatever was extracted was not a number'''
+			-999.5 = whatever was extracted was not a number
+			-999.6 = failed to load plugin
+			-999.7 = plugin error'''
 		import re
 
 		import bs4
 
-		# if site is supported
+		# if site is not supported
 		if self.site not in sites:
 			self.latest = Exception('site not supported')  # site not supported
 			return self.re(-999.1)
@@ -121,6 +141,25 @@ class Link():
 				elif tag.__class__ is list and all([t in self.parent.tags for t in tag]):
 					self.latest = Exception('skipped')
 					return self.re(0)
+		# if is "plugin"
+		if sites[0].split('.')[-1] in ('py', 'pyw'):
+			# import plugin
+			try:
+				plugin = __import__(sites[0][:-3]).__dict__[sites[1]]
+			except (ModuleNotFoundError, KeyError) as e:
+				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
+				print('plugin loading error:', self.link)
+				self.latest = e
+				return self.re(-999.6)
+			# run plugin
+			try:
+				self.latest = plugin(self.link)
+				return self.re()
+			except Exception as e:
+				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
+				print('plugin error:', self.link)
+				self.latest = e
+				return self.re(-999.7)
 		# tmp: special stuff for bato.to
 		if self.site == 'bato.to': link = self.link.replace('title/', 'rss/series/') + '.xml'
 		# connecting to site
@@ -129,6 +168,7 @@ class Link():
 			assert link.status_code == 200  # make sure connection was successful
 		except Exception as e:  # connection error
 			print('connection error:', self.link)
+			# link = str(link)
 			# console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e
 			return self.re(-999.2)
@@ -142,6 +182,7 @@ class Link():
 				# print('done rendering', self.link, '-', self.site)
 			except Exception as e:
 				print('failed to render:', self.link)  # render error
+				link = str(link)
 				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 				self.latest = e
 				return self.re(-999.3)
@@ -184,6 +225,7 @@ class Link():
 					assert tmp is not None
 					link = tmp
 		except (AttributeError, AssertionError) as e:
+			link = str(link)
 			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # parsing error
 			return self.re(-999.4)
@@ -194,6 +236,7 @@ class Link():
 			if int(self.latest) == self.latest:
 				self.latest = int(self.latest)
 		except Exception as e:
+			link = str(link)
 			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # whatever was extracted was not a number
 			return self.re(-999.5)
@@ -219,18 +262,21 @@ class Link():
 		'represent `self` as `self.link` between <>'
 		return f'<{self.link}>'  # type: ignore
 class GUI():  # pylint: disable=missing-class-docstring
+	styles = Dict({
+		'tab_panel': 'height: calc(100vh - 84px); width: calc(100vw - 32px)'
+	})
 	def __init__(self, settings: dict, files: list[dict[str, str]]) -> None:
 		# setup vars
 		self.settings = settings
 		self.open_tabs = Dict({'Main': Dict({'name': 'Main'})})
 		self.commands = {'/help': 'list all commands', '/debug': 'open debug tab', '/save': 'save all works in tab', '/reupdate': 'reupdate all works in tab', '/reload': 'close and reopen tab (without saving)', '/refresh': 'redraw table, Deprecated: just reload instead', '/close': 'close current tab (without saving)', '/exit': 'exit MangaRock with save', '/quit': 'exit MangaRock without save'}
 		# create tab holder with main tab
-		with ui.tabs().props('dense').on('update:model-value', self.switch_tab) as self.tabs:
+		with ui.tabs().props('dense') as self.tabs:
 			tab = ui.tab('Main')
 		# create panel holder
 		with ui.tab_panels(self.tabs, value=tab) as self.panels:
 			# create main panel
-			with ui.tab_panel('Main').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+			with ui.tab_panel('Main').style(GUI.styles.tab_panel):
 				ui.label('Choose File: ')
 				gridOptions = {  # pylint: disable=invalid-name
 					'defaultColDef': {
@@ -258,26 +304,26 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# run stuff
 		ui.timer(0, self.stuff, once=True)
 	def _input(self) -> ui.input:
-		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self.handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
+		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self._handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 	def _debug(self) -> None:
 		'opens debug tab'
 		# if debug tab is already open, switch to it
 		if 'debug' in self.open_tabs:
-			self.switch_tab(Dict({'args': 'Debug'}))
+			self.tabs.set_value('Debug')
 			return
 		# else create tab
 		self.open_tabs.debug = Dict()
 		with self.tabs:
 			ui.tab('Debug')
 		with self.panels:
-			with ui.tab_panel('Debug').style('height: calc(100vh - 84px); width: calc(100vw - 32px)'):
+			with ui.tab_panel('Debug').style(GUI.styles.tab_panel):
 				ui.label('Updating:')
 				with ui.row().classes('w-full'):
 					self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
 					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
 		# switch to tab
-		self.switch_tab(Dict({'args': 'Debug'}))
-	def jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
+		self.tabs.set_value('Debug')
+	def _jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
 		'upgrade aggrid from community to enterprise'
 		from pathlib import Path
 
@@ -297,22 +343,18 @@ class GUI():  # pylint: disable=missing-class-docstring
 		grid.libraries[0] = self.library
 		# return grid
 		return grid
-	def switch_tab(self, event: GenericEventArguments | Dict) -> None:
-		'switch to tab indicated by event'
-		self.tabs.props(f"model-value={event.args}")
-		self.panels.props(f"model-value={event.args}")
 	def close_tab(self, tab_name: str) -> None:
 		'closes indicated tab'
 		# get tab
 		tab = self.open_tabs[tab_name]
-		# cancel updating works in tab
-		tab.tasks.cancel()
+		# cancel updating works in tab (if tab has tasks)
+		if 'tasks' in tab: tab.tasks.cancel()
 		# delete stuff
 		tab.panel.delete()
 		tab.tab.delete()
-		# switch to main tab
 		del self.open_tabs[tab_name]
-		self.switch_tab(Dict({'args': 'Main'}))
+		# switch to main tab
+		self.tabs.set_value('Main')  # TODO: low, switch to last tab instead of main
 	def update_row(self, tab: Dict, link: Link, new_chapters: float = None, current_chapter: float = None) -> None:
 		'updates row with new chapter count'
 		row = tab.rows[link.index[tab.name]]
@@ -336,6 +378,60 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# run the javascript
 		with tab.grid:
 			ui.run_javascript(js + '\ngrid.applyTransaction({update: [node]})')
+	async def button_pressed(self):
+		'runs when the button in opened file tab is pressed'
+		# name = self.tabs._props['model-value']  # pylint: disable=protected-access
+		name = self.tabs.value
+		tab = self.open_tabs[name]
+		# get selected work, if any
+		selected = await tab.grid.get_selected_row() or await ui.run_javascript(f'return getElement({tab.grid.id}).gridOptions.api.getSelectedNodes()[0].groupData')
+		# if no work is selected, do nothing
+		if not selected:
+			print('no work selected')
+		else:
+			self.edit_work(tab.works[list(selected.values())[0]])
+	def edit_work(self, work):
+		'opens new tab to allow for editing a work\'s properties'
+		def apply(inputs, work):
+			'applies changes to work'
+			for key, val in inputs.items():
+				if val.__class__ is ui.textarea:
+					work[key] = val.value.split('\n')
+				else:
+					work[key] = val.value
+			# TODO: make sure that the old links got deleted/garbage collected and aren't just floating around somewhere
+		# if file already open, switch to it
+		if work.name in self.open_tabs:
+			self.tabs.set_value(work.name)
+			return
+		# create Dict for edit work tab and store in open_tabs
+		tab = self.open_tabs[work.name] = Dict({'name': work.name})
+		# create and switch to tab for file
+		with self.tabs:
+			tab.tab = ui.tab(work.name)
+		self.tabs.set_value(work.name)
+		# create panel for file
+		with self.panels:
+			with ui.tab_panel(tab.tab).style(GUI.styles.tab_panel) as tab.panel:
+				ui.label(f'Editing: {work.name}')
+				# list to store inputs
+				inputs = Dict()
+				# for each one of work's properties
+				for key, val in work.items():
+					# if key is not 'links'
+					with ui.row().classes('w-full'):
+						# ui.label(key)
+						if key == 'links':
+							inputs[key] = ui.textarea(key.title(), value='\n'.join([link.to_dict() for link in val])).classes('w-full')
+						elif val.__class__ is list:
+							inputs[key] = ui.textarea(key.title(), value='\n'.join(val)).classes('w-full')
+						else:
+							inputs[key] = ui.input(key.title(), value=val).classes('w-full')
+				# create buttons to close or apply tab
+				with ui.row().classes('w-full'):
+					ui.button('Close', on_click=wrap(self.close_tab, work.name)).props('square')
+					ui.button('Apply', on_click=wrap(apply, inputs, work)).props('square')
+
 	def save_tab(self, tab, name) -> None:
 		'Saves all works in `Works.all` to file specified'
 		from json import dump
@@ -346,15 +442,6 @@ class GUI():  # pylint: disable=missing-class-docstring
 		def load_file(file: str) -> list | Any:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			from json import load
-			# def add_work(*args, _format: str = None, **kwargs) -> Work:
-			# 	'formats `Type` argument and returns the created object'
-			# 	# if no `_format` is provided: look for `format` in `kwargs`
-			# 	if _format is None:
-			# 		assert 'format' in kwargs, 'work has no format specified'
-			# 		format = kwargs.pop('format')
-			# 	# return works object
-			# 	return Work(format, *args, **kwargs)
-
 			with open(file, 'r', encoding='utf8') as f:
 				return load(f, object_hook=lambda kwargs: Work(**kwargs))
 		def sort(works: dict | list, settings):
@@ -406,7 +493,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		tab_name = event.args['data']['name']
 		# if file already open, switch to it
 		if tab_name in self.open_tabs:
-			self.switch_tab(Dict({'args': tab_name}))
+			self.tabs.set_value(tab_name)
 			return
 		# get columns to display
 		assert tab_name in self.settings['to_display'], 'Columns for ' + tab_name + ' has not been specified in settings.yaml'  # make sure columns for file has been specified in settings, TODO: do something instead of crash
@@ -415,16 +502,22 @@ class GUI():  # pylint: disable=missing-class-docstring
 		cols[-1]['resizable'] = False
 		# load and sort works from file and reference them in open_tabs
 		works = sort(load_file(self.settings['json_files_dir'] + tab_name + '.json'), self.settings)
-		tab = self.open_tabs[tab_name] = Dict({'name': tab_name, 'works': {work.name: work for work in works}, 'links': Dict(), 'reading': None, 'open': set()}, recursive_convert=False)
+		tab = self.open_tabs[tab_name] = Dict({
+			'name': tab_name,
+			'works': {work.name: work for work in works},
+			'links': Dict(),
+			'reading': None,
+			'open': set()
+		}, recursive_convert=False)
 		# generate rowData
 		tab.rows = list(generate_rowData(works, tab))
 		# create and switch to tab for file
 		with self.tabs:
 			tab.tab = ui.tab(tab_name)
-		self.switch_tab(Dict({'args': tab_name}))
+		self.tabs.set_value(tab_name)
 		# create panel for file
 		with self.panels:
-			with ui.tab_panel(tab_name).style('height: calc(100vh - 84px); width: calc(100vw - 32px)') as tab.panel:
+			with ui.tab_panel(tab_name).style(GUI.styles.tab_panel) as tab.panel:
 				tab.label = ui.label('Reading: ')
 				gridOptions = {  # pylint: disable=invalid-name
 					'defaultColDef': {
@@ -443,20 +536,21 @@ class GUI():  # pylint: disable=missing-class-docstring
 					'animateRows': True,
 					'suppressAggFuncInHeader': True,
 					'groupAllowUnbalanced': True,
+					'rowSelection': 'single',
 					':getRowId': 'params => params.data.link',
 					':isExternalFilterPresent': '() => true',
 					':doesExternalFilterPass': 'params => params.data.isVisible',
 				}
-				tab.grid = self.jailbreak(ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)'))
-				tab.grid.on('rowGroupOpened', wrap(self.close_all_other, tab))
-				tab.grid.on('cellDoubleClicked', wrap(self.work_selected, tab))
+				tab.grid = self._jailbreak(ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)'))
+				tab.grid.on('rowGroupOpened', wrap(self._close_all_other, tab))
+				tab.grid.on('cellDoubleClicked', wrap(self._work_selected, tab))
 				with ui.row().classes('w-full').style('gap: 0'):
 					self._input()  # .style('width: 8px; height: 8px; border:0px; padding:0px; margin:0px')
-					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
+					ui.button(on_click=self.button_pressed).props('square').style('width: 40px; height: 40px;')
 		# update all works
 		await asyncio.sleep(1)
 		await self.update_all(tab)
-	async def close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add more comments
+	async def _close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add more comments
 		'is called whenever a row is opened'
 		tab_opened = event.args['rowId']
 		# if the row being opened is a child of the currently opened row, do nothing
@@ -503,7 +597,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			tab.tasks = asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works.values()], return_exceptions=True)
 			await tab.tasks
 		print('done updating', tab.name)
-	async def work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add comments
+	async def _work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add comments
 		'runs when a work is selected'
 		def open_link(link: str) -> None:
 			'opens link provided in new tab'
@@ -535,7 +629,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 				if work == tab.reading or tab.reading in work.links:
 					# set work's chapter to latest chapter
 					try:
-						work.update()
+						work.re()
 					except (ValueError, TypeError):
 						print('work has not been updated yet')
 						return
@@ -564,7 +658,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			tab.label.set_text('Reading: ' + tab.reading.name)
 			# open link
 			open_link(tab.reading.links[0].link)
-	async def handle_input(self, event: GenericEventArguments) -> None:
+	async def _handle_input(self, event: GenericEventArguments) -> None:
 		'handles input from input box'
 		# if input is empty, do nothing
 		if event.sender.value == '':
@@ -599,7 +693,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 				await self.update_all(tab)
 			# if is refresh command: re"draw" grid
 			elif entry == '/refresh':
-				tab.grid.update()
+				# tab.grid.options['rowData'] =
+				# tab.grid.update()
+				pass  # TODO: update every row using javascript instead of tab.grid.update() so that it doesn't reset stuff
 			# if is reload: re load file
 			elif entry == '/reload':
 				if name == 'Main':
@@ -638,8 +734,6 @@ class GUI():  # pylint: disable=missing-class-docstring
 					except Exception:  # pylint: disable=broad-exception-caught
 						console.print_exception(width=os.get_terminal_size().columns)
 						print(entry)
-
-						# print(e)  # pylint: disable=eval-used
 		# if is not a command
 		# if reading
 		elif tab.reading:
@@ -669,11 +763,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		event.sender.set_value(None)
 	async def stuff(self):
 		async def autosave():
-			import datetime
-
-			import dateparser
-			import pytimeparse
-
+			import datetime, dateparser, pytimeparse
 			# if autosave interval is not provided, disable autosave
 			if self.settings['autosave']['interval'] is None:
 				return
@@ -715,14 +805,14 @@ font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
 json_files_dir: ./  # default: ./
 tags_to_skip: [Skip, [Complete, Read]]  # works with specified tags will have update skipped and be hidden, [A, [B, C]] = A or (B and C)
 autosave:  # default: null, null = disabled, accepts reasonable inputs (eg.: 8:30 pm, 30 min)
-    start: null     # when to start autosaving, does nothing if interval is null
-    interval: null  # interval to autosave, starts whenever if start is null, if is single number, assumes minutes
+	start: null     # when to start autosaving, does nothing if interval is null
+	interval: null  # interval to autosave, starts whenever if start is null, if is single number, assumes minutes
 formats:  # each format can have its own properties, specify name of property and default value, name is required (i think)
     Manga: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
     Text: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
     Series: {name: null, links: [], volume: 0, author: null, score: null, tags: []}
 to_display:  # columns to display for each Type, do not include name (it's required and auto included)
-    example: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+	example: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
 sort_by: [name, score]  # default: [name, score], will sort by name then score, default is currently the only working option
 check_only_first_x_links: 0  # default: 0, 0 = check all links, will only check/update first x links then hide the rest, not yet implemented
 hide_unupdated_works: true  # default: true
@@ -736,22 +826,23 @@ renderers: 1  # default: 1
 scores: {no Good: -1, null: 0, ok: 1, ok+: 1.1, decent: 1.5, Good-: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
 sites_ignore: []
 sites:  # site,         find,        with,                       then_find, and get,       split at, then get, render?
-    www.royalroad.com: &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
-    www.webtoons.com:  &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
-    bato.to:           &003 [item,  null,                       title,     null,          ' ',      -1,       false]
-    mangafire.to:      &004 [div,   class: list-body,           li,        data-number,   ' ',      0,        false]
-    mangabuddy.com:    &005 [div,   class: latest-chapters,     a,         href,          '-',      -1,       false]
-    www.mgeko.com:     &006 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
-    zahard.xyz:        &007 [ul,    class: chapters,            a,         href,          /,        -1,       false]
-    manganato.com:     &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
-    reaper-scans.com:  &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
-    manhuaplus.com:    &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
-    mangadex.org:      &011 [div,   class: text-center,         null,      null,          -|\\.,     -1,       true]
-    null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]  # for aligning reasons
-    www.mcreader.net:  *006
-    www.mangageko.com: *006
-    chapmanganato.com: *008
-    readmanganato.com: *008
+	www.royalroad.com: &001 [table, id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
+	www.webtoons.com:  &002 [ul,    id: _listUl,                li,        id,            _,        -1,       false]
+	bato.to:           &003 [item,  null,                       title,     null,          ' ',      -1,       false]
+	mangafire.to:      &004 [div,   class: list-body,           li,        data-number,   ' ',      0,        false]
+	mangabuddy.com:    &005 [div,   class: latest-chapters,     a,         href,          '-',      -1,       false]
+	www.mgeko.com:     &006 [ul,    class: chapter-list,        a,         href,          -|/,      -4,       false]
+	zahard.xyz:        &007 [ul,    class: chapters,            a,         href,          /,        -1,       false]
+	manganato.com:     &008 [ul,    class: row-content-chapter, a,         href,          '-',      -1,       false]
+	reaper-scans.com:  &009 [span,  class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+	manhuaplus.com:    &010 [ul,    class: version-chap,        a,         href,          -|/,      -2,       false]
+	mangadex.org:      &011 [div,   class: text-center,         null,      null,          -|\\.,     -1,       true]
+	wattpad.com:       &012 [./plugins/wattpad.py, main]
+	null: [*001, *002, *003, *004, *005, *006, *007, *008, *009, *010, *011]  # for aligning reasons
+	www.mcreader.net:  *006
+	www.mangageko.com: *006
+	chapmanganato.com: *008
+	readmanganato.com: *008
 '''
 def main(name: str, *args, _dir: str | None = None, settings_file='settings.yaml') -> None:  # pylint: disable=unused-argument
 	'Main function'
@@ -791,23 +882,19 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 		with open(settings_file, 'w', encoding='utf8') as f: f.writelines(file)  # write file to settings_file
 
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
-	settings = Dict(yaml.load(_default_settings.replace('\t', '')), _convert=False)  # set default_settings
+	settings = Dict(yaml.load(_default_settings.replace('\t', '    ')), _convert=False)  # set default_settings
 	try:
 		with open(settings_file, 'r', encoding='utf8') as file:
 			settings.update(yaml.load(file))
 	except FileNotFoundError:
 		print('settings file not found, creating new settings file')
-
 	# "fix" json_files_dir if necessary
 	if settings.json_files_dir[-1] != '/': settings.json_files_dir += '/'
-
 	with open(settings_file, 'w', encoding='utf8') as file:
 		yaml.dump(settings._t, file)  # save settings to settings_file
 	format_sites(settings_file);   # format settings_file 'sites:' part
-
 	# "save" formats to `Work`
 	Work.formats = Dict(settings.formats)
-
 	# return settings
 	return settings
 def get_files(settings) -> list[dict[str, Any]]:

@@ -1,5 +1,6 @@
 # Version: 3.7.1, pylint: disable=invalid-name
 import asyncio, os
+from shutil import get_terminal_size
 from functools import partial as wrap
 from typing import Any, Iterable, Self
 
@@ -9,7 +10,7 @@ from nicegui import app, ui
 from nicegui.events import GenericEventArguments
 
 from rich.console import Console; console = Console()
-# from rich.traceback import install; install(width=os.get_terminal_size().columns)
+# from rich.traceback import install; install(width=get_terminal_size().columns)
 
 
 class Work(Dict):
@@ -771,7 +772,10 @@ class GUI():  # pylint: disable=missing-class-docstring
 			if self.settings['autosave']['start']:
 				# try to parse then wait until start time
 				try:
-					await asyncio.sleep((dateparser.parse(self.settings['autosave']['start'], settings={'PREFER_DATES_FROM': 'future'}) - datetime.datetime.now()).total_seconds())
+					sleep_time = dateparser.parse(self.settings['autosave']['start'], settings={'PREFER_DATES_FROM': 'past'}) - datetime.datetime.now()
+					if sleep_time < datetime.timedelta():
+						sleep_time += datetime.timedelta(1)
+					await asyncio.sleep(sleep_time.total_seconds())
 				except (ValueError, TypeError):
 					ui.notify('failed to parse start time, starting now')
 			# parse interval
@@ -787,13 +791,14 @@ class GUI():  # pylint: disable=missing-class-docstring
 					ui.notify('autosave interval needs to be > 0, autosave disabled')
 			else:
 				while True:
-					print('test')
-					await asyncio.sleep(interval)
+					# save all open files
 					for name, tab in self.open_tabs.items():
 						if name != 'Main':
 							self.save_tab(tab, name)
 							with self.tabs:
 								ui.notify('Saved ' + name)
+					# wait interval
+					await asyncio.sleep(interval)
 		# "runs" stuff
 		await asyncio.gather(autosave())
 
@@ -811,7 +816,7 @@ formats:  # each format can have its own properties, specify name of property an
     Manga: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
     Text: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
     Series: {name: null, links: [], volume: 0, author: null, score: null, tags: []}
-to_display:  # columns to display for each Type, do not include name (it's required and auto included)
+to_display:  # columns to display for each file, eg. {parameter name: [display name, aggFunc]}
 	example: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
 sort_by: [name, score]  # default: [name, score], will sort by name then score, default is currently the only working option
 check_only_first_x_links: 0  # default: 0, 0 = check all links, will only check/update first x links then hide the rest, not yet implemented

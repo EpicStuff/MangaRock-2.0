@@ -163,6 +163,10 @@ class Link():
 				return self.re(-999.7)
 		# tmp: special stuff for bato.to
 		if self.site == 'bato.to': link = self.link.replace('title/', 'rss/series/') + '.xml'
+		# # tmp: special stuff for royalroad
+		# if self.site == 'www.royalroad.com':
+		# 	import time
+		# 	time.sleep(0.5)
 		# connecting to site
 		try:
 			link = await async_session.get(link, follow_redirects=True)  # connecting to the site

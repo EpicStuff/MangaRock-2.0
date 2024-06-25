@@ -15,5 +15,3 @@ If by any chance there is someone interested in using this, make an issue or som
 ![](/docs/1.png)
 ![](/docs/2.png)
 ![](/docs/3.png)
-
-license: pls don't just copy and stuff

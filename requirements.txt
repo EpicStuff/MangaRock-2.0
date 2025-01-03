@@ -1,8 +1,7 @@
-epicstuff
+epicstuff=0.1.8
 lxml
-nicegui
+nicegui=1.4.37
 requests-html2  # for arch, yay -S python-playwright, 
-rich
 ruamel.yaml
 dateparser
 pytimeparse

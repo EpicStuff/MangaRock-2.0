@@ -1,20 +1,20 @@
 # Version: 3.7.1, pylint: disable=invalid-name
-import asyncio, os
+import asyncio, os, Path
+from collections.abc import Iterable
 from shutil import get_terminal_size
-from functools import partial as wrap
-from typing import Any, Iterable, Self
+from typing import Any, Self
 
-from epicstuff import Dict
-
+from epicstuff import Dict, wrap
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
+from rich.console import Console
+from rich.traceback import install
 
-from rich.console import Console; console = Console()
-from rich.traceback import install; install(width=get_terminal_size().columns)
-
+console = Console(); install(width=get_terminal_size().columns)
 
 class Work(Dict):
 	'''object representing a work, eg: a book, a series, a manga, etc.'''
+
 	formats: Dict
 	def __init__(self, format: str, *args: list, **kwargs: dict) -> None:  # pylint:disable=redefined-builtin
 		'''Applies args and kwargs to "`self.__dict__`" if kwarg is in `self.formats[format]`'''
@@ -50,8 +50,7 @@ class Work(Dict):
 				if len(value) > 1:
 					raise TypeError('unexpected multiple values within array')
 				# else unlist list
-				else:
-					value = value[0]
+				value = value[0]
 			# if default val is list and given val is not list then put given val in a list
 			elif isinstance(props[key], list) and not isinstance(value, list): value = [value]
 			# if default val is int or float and given val is not float then float given val
@@ -62,7 +61,7 @@ class Work(Dict):
 		# return converted value
 		return value
 	def re(self):
-		'why is this called re? no idea'
+		'Why is this called re? no idea'
 		# create list of links' latest chapters excluding errors and empty strings then get max
 		self.chapter = max([link.latest for link in self.links if not issubclass(link.latest.__class__, Exception) and link.latest != ''])
 		# update new chapters for each link
@@ -71,7 +70,7 @@ class Work(Dict):
 	def sort(self):
 		pass
 	def to_dict(self) -> dict:
-		'returns `self` as a dictionary'
+		'Returns `self` as a dictionary'
 		# d = {'format': self.format}
 		# for key, val in self.items():
 		# 	if val in ([], "None", None):
@@ -91,19 +90,20 @@ class Work(Dict):
                             if val not in ([], "None", None)
                             if key not in ('lChs', 'prop')
                             if not (key == 'name' and val == str(id(self)))
-      }
+      },
 		}  # convert attributes to a dictionary
 	def work(self) -> Self:
-		'returns `self`'
+		'Returns `self`'
 		return self
 	def __str__(self) -> str:
-		'returns `self` in `str` format'
+		'Returns `self` in `str` format'
 		return '<' + self.format + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.items() if key != 'name' and val != []]) + '}>'
 	def __repr__(self) -> str:
-		'represent `self` as `self.name` between <>'
+		'Represent `self` as `self.name` between <>'
 		return f'<{self.name}>'  # pylint: disable=no-member
 class Link():
-	'link object, can be updated to get latest chapter'
+	'Link object, can be updated to get latest chapter'
+
 	def __init__(self, link: str, parent: Work) -> None:
 		if not link.startswith('http'): link = 'https://' + link
 		self.site = link.split('/')[2]
@@ -113,6 +113,7 @@ class Link():
 		self.index = {}
 	async def update(self, renderers: asyncio.Semaphore, sites: dict, tags_to_skip: list, async_session) -> float | Exception:
 		'''Finds latest chapter from `self.link` then sets result or an error code to `self.latest`
+
 		# Error Codes:
 			-999.1 = site not supported
 			-999.2 = Connection Error
@@ -202,7 +203,7 @@ class Link():
 			assert tmp is not None
 			link = tmp
 			# if sites: "then find" and "and get" = null
-			if sites[2] == sites[3] == None:
+			if sites[2] is None and sites[3] is None:
 				# get contents
 				tmp = link.contents[0]
 				assert tmp is not None
@@ -249,8 +250,8 @@ class Link():
 			return self.re(-999.5)
 
 		return self.re()
-	def re(self, new: int | float = None) -> int | float:
-		'updates `self.new` from `new` arg or calculates if not provided, then returns `self.new`'
+	def re(self, new: float = None) -> int | float:
+		'Updates `self.new` from `new` arg or calculates if not provided, then returns `self.new`'
 		# why this function is called re? I have no idea
 		if new is None:
 			if not issubclass(self.latest.__class__, Exception):
@@ -260,17 +261,17 @@ class Link():
 		self.new = new
 		return new
 	def to_dict(self):
-		'convert `self` to a string'
+		'Convert `self` to a string'
 		return self.link
 	def work(self) -> Work:
-		'returns `self.parent`'
+		'Returns `self.parent`'
 		return self.parent
 	def __repr__(self) -> str:
-		'represent `self` as `self.link` between <>'
-		return f'<{self.link}>'  # type: ignore
+		'Represent `self` as `self.link` between <>'
+		return f'<{self.link}>'
 class GUI():  # pylint: disable=missing-class-docstring
 	styles = Dict({
-		'tab_panel': 'height: calc(100vh - 84px); width: calc(100vw - 32px)'
+		'tab_panel': 'height: calc(100vh - 84px); width: calc(100vw - 32px)',
 	})
 	def __init__(self, settings: dict, files: list[dict[str, str]]) -> None:
 		# setup vars
@@ -313,7 +314,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 	def _input(self) -> ui.input:
 		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self._handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 	def _debug(self) -> None:
-		'opens debug tab'
+		'Opens debug tab'
 		# if debug tab is already open, switch to it
 		if 'debug' in self.open_tabs:
 			self.tabs.set_value('Debug')
@@ -331,9 +332,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# switch to tab
 		self.tabs.set_value('Debug')
 	def _jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
-		'upgrade aggrid from community to enterprise'
-		from pathlib import Path
-
+		'Upgrade aggrid from community to enterprise'
 		from nicegui.dependencies import register_library
 
 		# if already jailbroken, return grid
@@ -343,7 +342,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		assert grid.libraries[0].name == 'ag-grid-community', 'Overwriting NiceGUI aggrid ran into a tiny problem, got wrong lib'
 		# if self.library does not exist, register library
 		try:
-			self.library
+			self.library  # trunk-ignore(ruff/B018)
 		except AttributeError:
 			self.library = register_library(Path(package).resolve())  # pylint: disable=attribute-defined-outside-init
 		# overwrite aggrid library with enterprise
@@ -351,7 +350,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# return grid
 		return grid
 	def close_tab(self, tab_name: str) -> None:
-		'closes indicated tab'
+		'Closes indicated tab'
 		# get tab
 		tab = self.open_tabs[tab_name]
 		# cancel updating works in tab (if tab has tasks)
@@ -363,7 +362,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# switch to main tab
 		self.tabs.set_value('Main')  # TODO: low, switch to last tab instead of main
 	def update_row(self, tab: Dict, link: Link, new_chapters: float = None, current_chapter: float = None) -> None:
-		'updates row with new chapter count'
+		'Updates row with new chapter count'
 		# get row
 		row = tab.rows[link.index[tab.name]]
 		# update "server side" data
@@ -387,7 +386,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		with tab.grid:
 			ui.run_javascript(js + '\ngrid.applyTransaction({update: [node]})')
 	async def button_pressed(self):
-		'runs when the button in opened file tab is pressed'
+		'Runs when the button in opened file tab is pressed'
 		# name = self.tabs._props['model-value']  # pylint: disable=protected-access
 		name = self.tabs.value
 		tab = self.open_tabs[name]
@@ -399,9 +398,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 		else:
 			self.edit_work(tab.works[list(selected.values())[0]])
 	def edit_work(self, work):
-		'opens new tab to allow for editing a work\'s properties'
+		'Opens new tab to allow for editing a work\'s properties'
 		def apply(inputs, work):
-			'applies changes to work'
+			'Applies changes to work'
 			for key, val in inputs.items():
 				if val.__class__ is ui.textarea:
 					work[key] = val.value.split('\n')
@@ -445,10 +444,11 @@ class GUI():  # pylint: disable=missing-class-docstring
 		with open(self.settings['json_files_dir'] + name + '.json', 'w', encoding='utf8') as f:
 			dump([work.to_dict() for work in tab.works.values()], f, indent='\t')
 	async def _file_opened(self, event: GenericEventArguments) -> None:
-		'runs when a file is selected in the main tab, creates a new tab for the file'
+		'Runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			from json import load
+
 			# def add_work(*args, _format: str = None, **kwargs) -> Work:
 			# 	'formats `Type` argument and returns the created object'
 			# 	# if no `_format` is provided: look for `format` in `kwargs`
@@ -458,10 +458,10 @@ class GUI():  # pylint: disable=missing-class-docstring
 			# 	# return works object
 			# 	return Work(format, *args, **kwargs)
 
-			with open(file, 'r', encoding='utf8') as f:
+			with Path(file).open() as f:
 				return load(f, object_hook=lambda kwargs: Work(**kwargs))
 		def sort(works: dict | list, settings):
-			'''sort `cls.all` by given dict, defaults to name'''
+			'''Sort `cls.all` by given dict, defaults to name'''
 			was_dict = works.__class__ is dict
 			# if `what` is a dict, convert it to a list
 			if was_dict:
@@ -484,7 +484,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 				works = {work.name: work for work in works}
 			return works
 		def generate_rowData(works: Iterable, tab: Dict):  # pylint: disable=invalid-name
-			'turns list of works into list of rows that aggrid can use and group'
+			'Turns list of works into list of rows that aggrid can use and group'
 			index = 0
 			# for each work in works
 			for work in works:
@@ -524,7 +524,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			'works': {work.name: work for work in works},
 			'links': Dict(),
 			'reading': None,
-			'open': set()
+			'open': set(),
 		}, recursive_convert=False)
 		# generate rowData
 		tab.rows = list(generate_rowData(works, tab))
@@ -541,7 +541,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 						'resizable': True,
 						'suppressMenu': True,
 						'suppressMovable': self.settings['disable_col_dragging'],
-						'cellRendererParams': {'suppressCount': True, },
+						'cellRendererParams': {'suppressCount': True},
 					},
 					'autoGroupColumnDef': {
 						'headerName': 'Name',
@@ -568,7 +568,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		await asyncio.sleep(1)
 		await self.update_all(tab)
 	async def _close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add more comments
-		'is called whenever a row is opened'
+		'Is called whenever a row is opened'
 		tab_opened = event.args['rowId']
 		# if the row being opened is a child of the currently opened row, do nothing
 		if await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").parent.id') in tab.open:
@@ -591,12 +591,12 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# set open to new opened row
 		tab.open.add(tab_opened)
 	async def update_all(self, tab: Dict) -> None:
-		'updates all works provided'
+		'Updates all works provided'
 		from requests_html2 import AsyncHTMLSession
 		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
 			try:
 				if 'links' in work:
-					for link in work.links:  # type: ignore
+					for link in work.links:
 						async with self.workers:
 							# if debug tab open
 							if 'debug' in self.open_tabs:
@@ -615,9 +615,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 			await tab.tasks
 		print('done updating', tab.name)
 	async def _work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add comments
-		'runs when a work is selected'
+		'Runs when a work is selected'
 		def open_link(link: str) -> None:
-			'opens link provided in new tab'
+			'Opens link provided in new tab'
 			ui.run_javascript(f"window.open('{link}')")
 		event = Dict(event.args)
 		# if neither work nor link was selected (not series, author, etc.), do nothing
@@ -676,7 +676,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			# open link
 			open_link(tab.reading.links[0].link)
 	async def _handle_input(self, event: GenericEventArguments) -> None:
-		'handles input from input box'
+		'Handles input from input box'
 		# if input is empty, do nothing
 		if event.sender.value == '':
 			return
@@ -694,11 +694,11 @@ class GUI():  # pylint: disable=missing-class-docstring
 			elif entry == '/error':
 				self.popup_text.set_content('''
 					Error Codes:\n
-					    -999.1: site not supported\n
-					    -999.2: Connection Error\n
-					    -999.3: rendering error, probably timeout\n
-					    -999.4: parsing error\n
-					    -999.5: whatever was extracted was not a number
+						-999.1: site not supported\n
+						-999.2: Connection Error\n
+						-999.3: rendering error, probably timeout\n
+						-999.4: parsing error\n
+						-999.5: whatever was extracted was not a number
 				''')
 				self.popup.open()
 			# if is debug command: open debug tab
@@ -865,22 +865,22 @@ sites:  # site,         find,        with,                       then_find, and 
 	chapmanganato.com: *008
 	readmanganato.com: *008
 '''
-def main(name: str, *args, _dir: str | None = None, settings_file='settings.yaml') -> None:  # pylint: disable=unused-argument
+def main(name: str, *, _dir: str | None = None, settings_file=Path('settings.yaml')) -> None:  # pylint: disable=unused-argument
 	'Main function'
 	# change environmental variables
 	os.environ["MATPLOTLIB"] = "false"
 	# change working directory to where file is located unless specified otherwise, just in case
-	os.chdir(_dir or os.path.dirname(os.path.realpath(__file__)))
-	if __debug__: print(f'working directory: {os.getcwd()}')
+	os.chdir(_dir or Path(__file__).parent)
+	if __debug__: print(f'working directory: {Path.cwd()}')
 	# setup gui
 	settings = load_settings(settings_file)
-	gui = GUI(settings, get_files(settings))  # pylint: disable=unused-variable
+	gui = GUI(settings, get_files(settings))  # trunk-ignore(pylint/W0612)
 	# start gui
 	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
-def load_settings(settings_file: str, _default_settings: str = default_settings) -> dict:
-	'load and return settings from indicated file, overwriting default settings'
-	def format_sites(settings_file: str) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
-		with open(settings_file, 'r', encoding='utf8') as f: file = f.readlines()  # loads settings_file into file
+def load_settings(settings_file: Path, _default_settings: str = default_settings) -> dict:
+	'Load and return settings from indicated file, overwriting default settings'
+	def format_sites(settings_file: Path) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
+		with settings_file.open() as f: file = f.readlines()  # loads settings_file into file
 		start = [num for num, line in enumerate(file) if line[0:6] == 'sites:'][0]  # gets index of where 'sites:' start
 		col = 0; adding = set(); done = set()
 		# remove all extra spaces from 'sites:' line
@@ -905,21 +905,21 @@ def load_settings(settings_file: str, _default_settings: str = default_settings)
 	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
 	settings = Dict(yaml.load(_default_settings.replace('\t', '    ')), _convert=False)  # set default_settings
 	try:
-		with open(settings_file, 'r', encoding='utf8') as file:
+		with settings_file.open() as file:
 			settings.update(yaml.load(file))
 	except FileNotFoundError:
 		print('settings file not found, creating new settings file')
 	# "fix" json_files_dir if necessary
 	if settings.json_files_dir[-1] != '/': settings.json_files_dir += '/'
-	with open(settings_file, 'w', encoding='utf8') as file:
-		yaml.dump(settings._t, file)  # save settings to settings_file
-	format_sites(settings_file);   # format settings_file 'sites:' part
+	with settings_file.open('w') as file:
+		yaml.dump(settings._t, file)  # save settings to settings_file  # ruff-ignore(pylint/W0212)
+	format_sites(settings_file)   # format settings_file 'sites:' part
 	# "save" formats to `Work`
 	Work.formats = Dict(settings.formats)
 	# return settings
 	return settings
 def get_files(settings) -> list[dict[str, Any]]:
-	'returns list of files in json_files_dir that ends with .json'
+	'Returns list of files in json_files_dir that ends with .json'
 	return [{'name': file.split('.json')[0]} for file in os.listdir(settings['json_files_dir']) if file.split('.')[-1] == 'json']
 
 

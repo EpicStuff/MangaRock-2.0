@@ -1,4 +1,4 @@
-target-version = "py312"
+target-version = "py313"
 
 [lint]
 # Generic, formatter-friendly config.
@@ -6,7 +6,7 @@ select = ["ALL"]
 # Never enforce `E501` (line length violations). This should be handled by formatters.
 ignore = [
 	"ANN",
-	"B607",
+	# "B607",
 	"D100",
 	"D101",
 	"D102",
@@ -22,15 +22,28 @@ ignore = [
 	"D415",
 	"E401",
 	"E501",
+	"E701",
+	"E702",
+	"EM101",
+	"ERA001",
 	"EXE002",
+	"F841",    # covered by pylint
 	"FBT",
+	"FIX002",
 	"PLW0603",
 	"Q000",
 	"Q001",
 	"Q002",
 	"RUF013",
+	"S101",
 	"SIM117",
+	"SLF001",  # covered by pylint
 	"T201",
+	# "TD001",
+	"TD002",
+	"TD003",
+	"TRY003",
+	"UP038",
 	"W191",
 ]
 

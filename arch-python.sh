@@ -1,3 +1,5 @@
+#!/bin/bash
+
 yay --noconfirm --sudoloop --needed -q -S \
 	python-rich \
 	python-lxml \

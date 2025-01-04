@@ -10,7 +10,7 @@ from nicegui import app, ui
 from nicegui.events import GenericEventArguments
 
 from rich.console import Console; console = Console()
-# from rich.traceback import install; install(width=get_terminal_size().columns)
+from rich.traceback import install; install(width=get_terminal_size().columns)
 
 
 class Work(Dict):
@@ -68,6 +68,8 @@ class Work(Dict):
 		# update new chapters for each link
 		for link in self.links:  # pylint: disable=no-member
 			link.re()
+	def sort(self):
+		pass
 	def to_dict(self) -> dict:
 		'returns `self` as a dictionary'
 		# d = {'format': self.format}
@@ -163,10 +165,10 @@ class Link():
 				return self.re(-999.7)
 		# tmp: special stuff for bato.to
 		if self.site == 'bato.to': link = self.link.replace('title/', 'rss/series/') + '.xml'
-		# # tmp: special stuff for royalroad
-		# if self.site == 'www.royalroad.com':
-		# 	import time
-		# 	time.sleep(0.5)
+		# tmp: special stuff for royalroad
+		if self.site == 'www.royalroad.com':
+			import time
+			time.sleep(1)
 		# connecting to site
 		try:
 			link = await async_session.get(link, follow_redirects=True)  # connecting to the site
@@ -362,6 +364,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		self.tabs.set_value('Main')  # TODO: low, switch to last tab instead of main
 	def update_row(self, tab: Dict, link: Link, new_chapters: float = None, current_chapter: float = None) -> None:
 		'updates row with new chapter count'
+		# get row
 		row = tab.rows[link.index[tab.name]]
 		# update "server side" data
 		if new_chapters is not None:  # if new_chapter was provided
@@ -369,7 +372,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			# determine visibility
 			row['isVisible'] = int(not (
 				new_chapters == 0 and self.settings['hide_unupdated_works'] or  # hide if no new chapters and hide_unupdated_works or
-				int(new_chapters) == -999 and self.settings['hide_errored_updates']  # hide if new_chapters is error and hide_errored_updates
+				int(new_chapters) == -999 and self.settings['hide_errored_updates']  # hide if new_chapters is error and hide_updates_with_errors
 			))
 		if current_chapter is not None: row['chapter'] = current_chapter  # if current chapter was provided
 		# code to update "client side" data
@@ -436,7 +439,6 @@ class GUI():  # pylint: disable=missing-class-docstring
 				with ui.row().classes('w-full'):
 					ui.button('Close', on_click=wrap(self.close_tab, work.name)).props('square')
 					ui.button('Apply', on_click=wrap(apply, inputs, work)).props('square')
-
 	def save_tab(self, tab, name) -> None:
 		'Saves all works in `Works.all` to file specified'
 		from json import dump
@@ -447,6 +449,15 @@ class GUI():  # pylint: disable=missing-class-docstring
 		def load_file(file: str) -> list | Any:
 			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
 			from json import load
+			# def add_work(*args, _format: str = None, **kwargs) -> Work:
+			# 	'formats `Type` argument and returns the created object'
+			# 	# if no `_format` is provided: look for `format` in `kwargs`
+			# 	if _format is None:
+			# 		assert 'format' in kwargs, 'work has no format specified'
+			# 		format = kwargs.pop('format')
+			# 	# return works object
+			# 	return Work(format, *args, **kwargs)
+
 			with open(file, 'r', encoding='utf8') as f:
 				return load(f, object_hook=lambda kwargs: Work(**kwargs))
 		def sort(works: dict | list, settings):
@@ -505,6 +516,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 		cols = [{'field': 'isVisible', 'aggFunc': 'max', 'hide': True}]
 		cols += [{'field': key, 'rowGroup': True, 'hide': True} if val[1] == 'group' else {'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']} for key, val in self.settings['to_display'][tab_name].items()]  # convert into aggrid cols forma
 		cols[-1]['resizable'] = False
+		cols[-1]['flex'] = 1  # TODO: test
 		# load and sort works from file and reference them in open_tabs
 		works = sort(load_file(self.settings['json_files_dir'] + tab_name + '.json'), self.settings)
 		tab = self.open_tabs[tab_name] = Dict({
@@ -820,14 +832,14 @@ formats:  # each format can have its own properties, specify name of property an
     Manga: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
     Text: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
     Series: {name: null, links: [], volume: 0, author: null, score: null, tags: []}
-to_display:  # columns to display for each file, eg. {parameter name: [display name, aggFunc]}
+to_display:  # columns to display for each file, {parameter name: [display name, aggFunc]}
 	example: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
 sort_by: [name, score]  # default: [name, score], will sort by name then score, default is currently the only working option
 check_only_first_x_links: 0  # default: 0, 0 = check all links, will only check/update first x links then hide the rest, not yet implemented
 hide_unupdated_works: true  # default: true
 hide_works_with_no_links: true  # default: true
 hide_errored_updates: false  # default: false
-default_column_width: 16  # default: 16
+default_column_width: 32  # default: 32
 row_height: 32  # default: 32
 disable_col_dragging: true  # default: true
 workers: 3  # default: 3

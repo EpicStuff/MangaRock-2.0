@@ -15,3 +15,8 @@ If by any chance there is someone interested in using this, make an issue or som
 ![](/docs/1.png)
 ![](/docs/2.png)
 ![](/docs/3.png)
+
+## Notes to Self
+for nicegui update
+- for v1.4.24: `ui.aggrid.get_selected_row` and also maybe `ui.run_javascript` no longer work without `ui.page`
+- for v2.0.0: `_jailbreak` needs to be rewriten

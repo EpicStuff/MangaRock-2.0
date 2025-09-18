@@ -1,5 +1,6 @@
 # Version: 3.7.1, pylint: disable=invalid-name
-import asyncio, os, Path
+import asyncio, os
+from pathlib import Path
 from collections.abc import Iterable
 from shutil import get_terminal_size
 from typing import Any, Self
@@ -30,7 +31,7 @@ class Work(Dict):
 				self[key] = val
 		# if no name was provided, generate a name
 		if self.name is None: self.name = str(id(self))
-	def convert(self, value, key, ignore__convert=None) -> Any:  # pylint: disable=unused-argument
+	def convert(self, value, key, ignore_convert=None) -> Any:  # pylint: disable=unused-argument
 		# if is format, do nothing
 		if key == 'format':
 			pass
@@ -87,10 +88,10 @@ class Work(Dict):
 		return {
 			**{'format': self.format},
 			**{key: val if key != 'links' else [link.to_dict() for link in val] for key, val in self.items()
-                            if val not in ([], "None", None)
-                            if key not in ('lChs', 'prop')
-                            if not (key == 'name' and val == str(id(self)))
-      },
+				if val not in ([], "None", None)
+				if key not in ('lChs', 'prop')
+				if not (key == 'name' and val == str(id(self)))
+			},
 		}  # convert attributes to a dictionary
 	def work(self) -> Self:
 		'Returns `self`'
@@ -142,7 +143,7 @@ class Link():
 					self.latest = Exception('skipped')
 					return self.re(0)
 				# if tag is list and all tags in list are in work
-				elif tag.__class__ is list and all([t in self.parent.tags for t in tag]):
+				if isinstance(tag, list) and all([t in self.parent.tags for t in tag]):
 					self.latest = Exception('skipped')
 					return self.re(0)
 		# if is "plugin"
@@ -381,7 +382,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 				node.isVisible = {row['isVisible']};
 			'''
 		if new_chapters is not None: js += f'\nnode.nChs = {new_chapters};'  # if new_chapter was provided
-		if current_chapter is not None: js += f'\nnode.chapter = {current_chapter};'    # if current chapter was provided
+		if current_chapter is not None: js += f'\nnode.chapter = {current_chapter};'  # if current chapter was provided
 		# run the javascript
 		with tab.grid:
 			ui.run_javascript(js + '\ngrid.applyTransaction({update: [node]})')

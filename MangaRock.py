@@ -1,22 +1,20 @@
-# Version: 3.7.1, pylint: disable=invalid-name
+# Version: 3.7.1, pylint: disable=invalid-name # ruff: noqa: ERA001
 import asyncio, os
 from pathlib import Path
 from collections.abc import Iterable
-from shutil import get_terminal_size
 from typing import Any, Self
 
-from epicstuff import Dict, wrap
+from epicstuff import Dict, wrap, run_install_trace, rich_try, open  # noqa: F401
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
-from rich.console import Console
-from rich.traceback import install
 
-console = Console(); install(width=get_terminal_size().columns)
 
 class Work(Dict):
 	'''object representing a work, eg: a book, a series, a manga, etc.'''
 
 	formats: Dict
+	_protected_keys = Dict._protected_keys | {'formats', 'format'}  # noqa: SLF001
+
 	def __init__(self, format: str, *args: list, **kwargs: dict) -> None:  # pylint:disable=redefined-builtin
 		'''Applies args and kwargs to "`self.__dict__`" if kwarg is in `self.formats[format]`'''
 		self.format = format
@@ -24,14 +22,16 @@ class Work(Dict):
 		# convert args from list to dict then update them to kwargs
 		kwargs.update({tuple(props.keys())[num]: arg for num, arg in enumerate(args) if arg not in ['', None, *kwargs.values()]})
 		# set self properties to default property values
-		super().__init__(props, recursive_convert=False)  # pylint: disable=unexpected-keyword-arg
+		super().__init__(props, True)  # pylint: disable=unexpected-keyword-arg
 		# for every kwarg, format it and update `self` with it
 		for key, val in kwargs.items():
 			if key in self:
 				self[key] = val
 		# if no name was provided, generate a name
 		if self.name is None: self.name = str(id(self))
-	def convert(self, value, key, ignore_convert=None) -> Any:  # pylint: disable=unused-argument
+
+		self._convert = False  # not super sure why i need this
+	def _do_convert(self, value, key) -> Any:  # pylint: disable=unused-argument
 		# if is format, do nothing
 		if key == 'format':
 			pass
@@ -40,7 +40,7 @@ class Work(Dict):
 			# if only 1 link given (in the form of a str), convert to list
 			if value.__class__ is str:
 				value = [value]
-			value = [Link(link, self) for link in value]
+			value = [Link(link, self) for link in value if not isinstance(link, Link)]
 		else:
 			props = self.formats[self.format]
 			# if given val is a tuple then turn given val into a list
@@ -87,7 +87,8 @@ class Work(Dict):
 		# return d
 		return {
 			**{'format': self.format},
-			**{key: val if key != 'links' else [link.to_dict() for link in val] for key, val in self.items()
+			**{
+				key: val if key != 'links' else [link.to_dict() for link in val] for key, val in self.items()
 				if val not in ([], "None", None)
 				if key not in ('lChs', 'prop')
 				if not (key == 'name' and val == str(id(self)))
@@ -442,8 +443,9 @@ class GUI():  # pylint: disable=missing-class-docstring
 	def save_tab(self, tab, name) -> None:
 		'Saves all works in `Works.all` to file specified'
 		from json import dump
-		with open(self.settings['json_files_dir'] + name + '.json', 'w', encoding='utf8') as f:
+		with open(self.settings['json_files_dir'] + name + '.json', 'w') as f:
 			dump([work.to_dict() for work in tab.works.values()], f, indent='\t')
+	@rich_try
 	async def _file_opened(self, event: GenericEventArguments) -> None:
 		'Runs when a file is selected in the main tab, creates a new tab for the file'
 		def load_file(file: str) -> list | Any:
@@ -877,7 +879,7 @@ def main(name: str, *, _dir: str | None = None, settings_file=Path('settings.yam
 	settings = load_settings(settings_file)
 	gui = GUI(settings, get_files(settings))  # trunk-ignore(pylint/W0612)
 	# start gui
-	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False)
+	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False, show=False)
 def load_settings(settings_file: Path, _default_settings: str = default_settings) -> dict:
 	'Load and return settings from indicated file, overwriting default settings'
 	def format_sites(settings_file: Path) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
@@ -913,7 +915,7 @@ def load_settings(settings_file: Path, _default_settings: str = default_settings
 	# "fix" json_files_dir if necessary
 	if settings.json_files_dir[-1] != '/': settings.json_files_dir += '/'
 	with settings_file.open('w') as file:
-		yaml.dump(settings._t, file)  # save settings to settings_file  # ruff-ignore(pylint/W0212)
+		yaml.dump(settings.data, file)  # save settings to settings_file  # ruff-ignore(pylint/W0212)
 	format_sites(settings_file)   # format settings_file 'sites:' part
 	# "save" formats to `Work`
 	Work.formats = Dict(settings.formats)

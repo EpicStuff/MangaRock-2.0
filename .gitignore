@@ -1,5 +1,7 @@
-.vscode/
 __pycache__/
-test.*
-settings.yaml
+.nicegui/
+.vscode/
 *.seaflnk
+ag-grid-enterprise.min.js
+test.*
+tmp.ipynb

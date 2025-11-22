@@ -1,19 +1,24 @@
-# Version: 3.7.1, pylint: disable=invalid-name # ruff: noqa: ERA001
-import asyncio, os
-from pathlib import Path
+# Version: 3.7.1, pylint: disable=invalid-name # ruff: noqa: ERA001, PLC0415
+import asyncio
+import os
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any, Self
 
-from epicstuff import Dict, wrap, run_install_trace, rich_try, open  # noqa: F401
+from epicstuff import BoxDict, Dict, open, rich_trace, rich_try, run_install_trace, show_locals, wrap  # noqa: F401, pylint: disable=W0611,W0622
 from nicegui import app, ui
 from nicegui.events import GenericEventArguments
+from nicegui_aggrid import enterprise
+
+show_locals(False)
+enterprise('ag-grid-enterprise.min.js')
 
 
-class Work(Dict):
+class Work(BoxDict):
 	'''object representing a work, eg: a book, a series, a manga, etc.'''
 
 	formats: Dict
-	_protected_keys = Dict._protected_keys | {'formats', 'format'}  # noqa: SLF001
+	_protected_keys = BoxDict._protected_keys | {'formats', 'format'}  # noqa: SLF001
 
 	def __init__(self, format: str, *args: list, **kwargs: dict) -> None:  # pylint:disable=redefined-builtin
 		'''Applies args and kwargs to "`self.__dict__`" if kwarg is in `self.formats[format]`'''
@@ -22,7 +27,7 @@ class Work(Dict):
 		# convert args from list to dict then update them to kwargs
 		kwargs.update({tuple(props.keys())[num]: arg for num, arg in enumerate(args) if arg not in ['', None, *kwargs.values()]})
 		# set self properties to default property values
-		super().__init__(props, True)  # pylint: disable=unexpected-keyword-arg
+		super().__init__(props, _convert=True)  # pylint: disable=unexpected-keyword-arg
 		# for every kwarg, format it and update `self` with it
 		for key, val in kwargs.items():
 			if key in self:
@@ -288,7 +293,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			# create main panel
 			with ui.tab_panel('Main').style(GUI.styles.tab_panel):
 				ui.label('Choose File: ')
-				gridOptions = {  # pylint: disable=invalid-name
+				gridOptions = {  # pylint: disable=invalid-name  # noqa: N806
 					'defaultColDef': {
 						'resizable': True,
 						'suppressMenu': True,
@@ -299,7 +304,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 					'rowData': files,
 					'rowHeight': self.settings['row_height'],
 				}
-				self.open_tabs.Main.grid = ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)').on('cellDoubleClicked', self._file_opened)
+				self.open_tabs.Main.grid = ui.aggrid(gridOptions, theme='balham').style('height: calc(100vh - 164px)').on('cellDoubleClicked', self._file_opened)
 				with ui.row().classes('w-full'):
 					self._input()
 					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
@@ -333,24 +338,6 @@ class GUI():  # pylint: disable=missing-class-docstring
 					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
 		# switch to tab
 		self.tabs.set_value('Debug')
-	def _jailbreak(self, grid: ui.aggrid, package: str = 'ag-grid-enterprise.min.js') -> ui.aggrid:
-		'Upgrade aggrid from community to enterprise'
-		from nicegui.dependencies import register_library
-
-		# if already jailbroken, return grid
-		if grid.libraries[0].name == 'ag-grid-enterprise':
-			return grid
-		# check if targeted library is ag-grid-community
-		assert grid.libraries[0].name == 'ag-grid-community', 'Overwriting NiceGUI aggrid ran into a tiny problem, got wrong lib'
-		# if self.library does not exist, register library
-		try:
-			self.library  # trunk-ignore(ruff/B018)
-		except AttributeError:
-			self.library = register_library(Path(package).resolve())  # pylint: disable=attribute-defined-outside-init
-		# overwrite aggrid library with enterprise
-		grid.libraries[0] = self.library
-		# return grid
-		return grid
 	def close_tab(self, tab_name: str) -> None:
 		'Closes indicated tab'
 		# get tab
@@ -463,6 +450,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 
 			with Path(file).open() as f:
 				return load(f, object_hook=lambda kwargs: Work(**kwargs))
+
 		def sort(works: dict | list, settings):
 			'''Sort `cls.all` by given dict, defaults to name'''
 			was_dict = works.__class__ is dict
@@ -486,6 +474,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			if was_dict:
 				works = {work.name: work for work in works}
 			return works
+
 		def generate_rowData(works: Iterable, tab: Dict):  # pylint: disable=invalid-name
 			'Turns list of works into list of rows that aggrid can use and group'
 			index = 0
@@ -517,7 +506,12 @@ class GUI():  # pylint: disable=missing-class-docstring
 		# get columns to display
 		assert tab_name in self.settings['to_display'], 'Columns for ' + tab_name + ' has not been specified in settings.yaml'  # make sure columns for file has been specified in settings, TODO: do something instead of crash
 		cols = [{'field': 'isVisible', 'aggFunc': 'max', 'hide': True}]
-		cols += [{'field': key, 'rowGroup': True, 'hide': True} if val[1] == 'group' else {'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']} for key, val in self.settings['to_display'][tab_name].items()]  # convert into aggrid cols forma
+		# convert into aggrid cols format
+		for key, val in self.settings.to_display[tab_name].items():
+			if val[1] == 'group':
+				cols.append({'field': key, 'rowGroup': True, 'hide': True})
+			else:
+				cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']})
 		cols[-1]['resizable'] = False
 		cols[-1]['flex'] = 1  # TODO: test
 		# load and sort works from file and reference them in open_tabs
@@ -528,7 +522,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 			'links': Dict(),
 			'reading': None,
 			'open': set(),
-		}, recursive_convert=False)
+		})
 		# generate rowData
 		tab.rows = list(generate_rowData(works, tab))
 		# create and switch to tab for file
@@ -561,7 +555,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 					':isExternalFilterPresent': '() => true',
 					':doesExternalFilterPass': 'params => params.data.isVisible',
 				}
-				tab.grid = self._jailbreak(ui.aggrid(gridOptions, theme='alpine-dark' if self.settings['dark_mode'] else 'balham').style('height: calc(100vh - 164px)'))
+				tab.grid = ui.aggrid(gridOptions, theme='balham', auto_size_columns=False).style('height: calc(100vh - 164px)')
 				tab.grid.on('rowGroupOpened', wrap(self._close_all_other, tab))
 				tab.grid.on('cellDoubleClicked', wrap(self._work_selected, tab))
 				with ui.row().classes('w-full').style('gap: 0'):
@@ -596,6 +590,7 @@ class GUI():  # pylint: disable=missing-class-docstring
 	async def update_all(self, tab: Dict) -> None:
 		'Updates all works provided'
 		from requests_html2 import AsyncHTMLSession
+
 		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
 			try:
 				if 'links' in work:
@@ -783,7 +778,11 @@ class GUI():  # pylint: disable=missing-class-docstring
 		event.sender.set_value(None)
 	async def stuff(self):
 		async def autosave():
-			import datetime, dateparser, pytimeparse
+			import datetime
+
+			import dateparser
+			import pytimeparse
+
 			# if autosave interval is not provided, disable autosave
 			if self.settings['autosave']['interval'] is None:
 				return
@@ -868,8 +867,8 @@ sites:  # site,         find,        with,                       then_find, and 
 	chapmanganato.com: *008
 	readmanganato.com: *008
 '''
-def main(name: str, *, _dir: str | None = None, settings_file=Path('settings.yaml')) -> None:  # pylint: disable=unused-argument
-	'Main function'
+def main(name: str, *, _dir: str | None = None, settings_file=Path('settings.taml')) -> None:  # pylint: disable=unused-argument
+	'Main function.'
 	# change environmental variables
 	os.environ["MATPLOTLIB"] = "false"
 	# change working directory to where file is located unless specified otherwise, just in case
@@ -877,7 +876,8 @@ def main(name: str, *, _dir: str | None = None, settings_file=Path('settings.yam
 	if __debug__: print(f'working directory: {Path.cwd()}')
 	# setup gui
 	settings = load_settings(settings_file)
-	gui = GUI(settings, get_files(settings))  # trunk-ignore(pylint/W0612)
+	with rich_trace:
+		gui = GUI(settings, get_files(settings))  # trunk-ignore(pylint/W0612)
 	# start gui
 	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False, show=False)
 def load_settings(settings_file: Path, _default_settings: str = default_settings) -> dict:
@@ -905,17 +905,19 @@ def load_settings(settings_file: Path, _default_settings: str = default_settings
 			col += 1  # increase column counter
 		with open(settings_file, 'w', encoding='utf8') as f: f.writelines(file)  # write file to settings_file
 
-	import ruamel.yaml; yaml = ruamel.yaml.YAML(); yaml.indent(mapping=4, sequence=4, offset=2); yaml.default_flow_style = None; yaml.width = 4096  # setup yaml
-	settings = Dict(yaml.load(_default_settings.replace('\t', '    ')), _convert=False)  # set default_settings
+	from taml import taml
+	taml.width = 4096
+	settings = taml.loads(_default_settings)  # set default_settings
 	try:
 		with settings_file.open() as file:
-			settings.update(yaml.load(file))
+			settings.update(taml.load(file))
 	except FileNotFoundError:
 		print('settings file not found, creating new settings file')
 	# "fix" json_files_dir if necessary
 	if settings.json_files_dir[-1] != '/': settings.json_files_dir += '/'
 	with settings_file.open('w') as file:
-		yaml.dump(settings.data, file)  # save settings to settings_file  # ruff-ignore(pylint/W0212)
+		data = settings.data
+		taml.dump(data, file)  # save settings to settings_file  # ruff-ignore(pylint/W0212)
 	format_sites(settings_file)   # format settings_file 'sites:' part
 	# "save" formats to `Work`
 	Work.formats = Dict(settings.formats)
@@ -928,4 +930,7 @@ def get_files(settings) -> list[dict[str, Any]]:
 
 if __name__ in {"__main__", "__mp_main__"}:
 	import sys
+
+	import nicegui
+	print('Using nicegui version:', nicegui.__version__)
 	main(*sys.argv)

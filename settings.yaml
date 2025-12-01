@@ -1,0 +1,37 @@
+dark_mode: true  # default: true
+font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
+json_files_dir: ./  # default: ./
+tags_to_skip: [Skip, [Complete, Read]]  # works with specified tags will have update skipped and be hidden, [A, [B, C]] = A or (B and C)
+autosave:  # default: null, null = disabled, accepts reasonable inputs (eg.: 8:30 pm, 30 min)
+    start:          # when to start autosaving, does nothing if interval is null
+    interval:       # interval to autosave, starts whenever if start is null, if is single number, assumes minutes
+formats:  # each format can have its own properties, specify name of property and default value, name is required (i think)
+    Manga: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
+    Text: {name: null, links: [], chapter: 0, series: null, author: null, score: null, tags: []}
+    Series: {name: null, links: [], volume: 0, author: null, score: null, tags: []}
+to_display:  # columns to display for each file, eg. {parameter name: [display name, aggFunc]}
+    example: {series: [Series, group], name: [Name, group], nChs: [New Chapters, max], chapter: [Current Chapter, first], tags: [Tags, first]}
+sort_by: [name, score]  # default: [name, score], will sort by name then score, default is currently the only working option
+check_only_first_x_links: 0  # default: 0, 0 = check all links, will only check/update first x links then hide the rest, not yet implemented
+hide_unupdated_works: true  # default: true
+hide_works_with_no_links: true  # default: true
+hide_errored_updates: false  # default: false
+default_column_width: 16  # default: 16
+row_height: 32  # default: 32
+disable_col_dragging: true  # default: true
+workers: 3  # default: 3
+renderers: 1  # default: 1
+scores: {no Good: -1, null: 0, ok: 1, ok+: 1.1, decent: 1.5, Good-: 1.5, Good: 2, Good+: 2.1, Great: 3}  # numerical value of score used when sorting by score
+sites_ignore: []
+sites:  # site,        find,                  with,                       then_find, and get,       split at, then get, render?
+    www.royalroad.com: [table,                id: chapters,               null,      data-chapters, ' ',      0,        false]  # based on absolute chapter count, not chapter name
+    www.webtoons.com:  [ul,                   id: _listUl,                li,        id,            _,        -1,       false]
+    bato.to:           [item,                 null,                       title,     null,          ' ',      -1,       false]
+    mangapark.com:     [div,                  data-name: chapter-list,    a,         href,          '-',      -1,       true]
+    mangafire.to:      [div,                  class: list-body,           li,        data-number,   ' ',      0,        false]
+    mangabuddy.com:    [div,                  class: latest-chapters,     a,         href,          '-',      -1,       false]
+    # www.mgeko.com:   &006 [ul,              class: chapter-list,        a,         href,          -|/,      -4,       false]
+    # manganato.com:   &008 [ul,              class: row-content-chapter, a,         href,          '-',      -1,       false]
+    reaper-scans.com:  [span,                 class: epcur epcurlast,     null,      null,          ' ',      1,        false]
+    mangadex.org:      [div,                  class: text-center,         null,      null,          -|\.,     -1,       true]
+    wattpad.com:       [./plugins/wattpad.py, main]

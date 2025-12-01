@@ -1,5 +1,5 @@
 [MAIN]
-py-version=3.13
+py-version=3.13.7
 
 [FORMAT]
 indent-string="\t"

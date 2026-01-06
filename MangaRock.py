@@ -1,21 +1,23 @@
 # Version: 3.7.1, pylint: disable=invalid-name # ruff: noqa: PLC0415, C901
-import asyncio
-import os
-from collections.abc import Iterable
+from __future__ import annotations
+import asyncio, os
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, overload, TYPE_CHECKING
 
-from epicstuff import BoxDict, Dict, open, rich_trace, rich_try, run_install_trace, show_locals, wrap  # noqa: F401, pylint: disable=W0611,W0622
+from epicstuff import Dict, install_trace, open, rich_trace, rich_try, wrap  # noqa: A004
 from nicegui import app, ui
-from nicegui.events import GenericEventArguments
-from nicegui_aggrid import enterprise, AgDict
+from nicegui_aggrid import AgDict, enterprise
 
-show_locals(False)
+if TYPE_CHECKING:
+	from collections import abc
+	from nicegui.events import GenericEventArguments
+
+install_trace(False)
 enterprise('ag-grid-enterprise.min.js')
 
 
 class GUI:
-	'''Class to share variables between functions.'''
+	'Class to share variables between functions.'
 
 	ui.tab_panel.default_style('height: calc(100vh - 84px); width: calc(100vw - 32px)')
 	ui.aggrid.default_style('height: calc(100vh - 164px)')
@@ -38,27 +40,25 @@ class GUI:
 		# create tab holder with main tab
 		with ui.tabs().props('dense no-caps') as self.tabs:
 			tab = ui.tab('Main')
-		# create panel holder
-		with ui.tab_panels(self.tabs, value=tab) as self.panels:
-			# create main panel
-			with ui.tab_panel('Main'):
-				ui.label('Choose File: ')
-				self.open_tabs.Main.grid = AgDict(
-					{
-						'defaultColDef': {
-							'resizable': True,
-							'suppressHeaderMenuButton': True,
-						},
-						'rowHeight': settings.row_height,
+		# create panel holder and main panel
+		with ui.tab_panels(self.tabs, value=tab) as self.panels, ui.tab_panel('Main'):
+			ui.label('Choose File: ')
+			self.open_tabs.Main.grid = AgDict(
+				{
+					'defaultColDef': {
+						'resizable': True,
+						'suppressHeaderMenuButton': True,
 					},
-					[{'headerName': 'Name', 'field': 'name', 'resizable': False}],
-					files,
-					'name',
-					ui.aggrid({}, theme='balham').on('cellDoubleClicked', self._file_opened),
-				)
-				with ui.row().classes('w-full'):
-					self._input()
-					ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
+					'rowHeight': settings.row_height,
+				},
+				[{'headerName': 'Name', 'field': 'name', 'resizable': False}],
+				files,
+				'name',
+				ui.aggrid({}, theme='balham').on('cellDoubleClicked', self._file_opened),
+			)
+			with ui.row().classes('w-full'):
+				self._input()
+				ui.button(on_click=lambda: print('placeholder')).props('square').style('width: 40px; height: 40px;')
 		# create popup
 		with ui.dialog().props('full-width full-height') as self.popup, ui.card().props('square').classes('w-full h-full'):
 			self.popup_text = ui.markdown('')
@@ -72,7 +72,7 @@ class GUI:
 	def _input(self) -> ui.input:
 		return ui.input(autocomplete=list(self.commands.keys())).on('keydown.enter', self._handle_input).props('square filled dense="dense" clearable clear-icon="close"').classes('flex-grow')
 	def _debug(self) -> None:
-		'Opens debug tab'
+		'Open debug tab.'
 		# if debug tab is already open, switch to it
 		if 'debug' in self.open_tabs:
 			self.tabs.set_value('Debug')
@@ -81,16 +81,15 @@ class GUI:
 		self.open_tabs.debug = Dict()
 		with self.tabs:
 			ui.tab('Debug')
-		with self.panels:
-			with ui.tab_panel('Debug').style(GUI.styles.tab_panel):
-				ui.label('Updating:')
-				with ui.row().classes('w-full'):
-					self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
-					self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
+		with self.panels, ui.tab_panel('Debug').style(GUI.styles.tab_panel):
+			ui.label('Updating:')
+			with ui.row().classes('w-full'):
+				self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
+				self.open_tabs.debug.done = ui.table(columns=[{'name': 'name', 'label': 'done', 'field': 'name'}], rows=[], row_key='name')
 		# switch to tab
 		self.tabs.set_value('Debug')
 	def close_tab(self, tab_name: str) -> None:
-		'Closes indicated tab'
+		'Close indicated tab.'
 		# get tab
 		tab = self.open_tabs[tab_name]
 		# cancel updating works in tab (if tab has tasks)
@@ -101,8 +100,8 @@ class GUI:
 		del self.open_tabs[tab_name]
 		# switch to main tab
 		self.tabs.set_value('Main')  # TODO: low, switch to last tab instead of main
-	def update_row(self, tab: Dict, link: 'Link', new_chapters: float = None, current_chapter: float = None) -> None:
-		'Updates row with new chapter count'
+	def update_row(self, tab: Dict, link: Link, new_chapters: float = None, current_chapter: float = None) -> None:
+		'Update row with new chapter count.'
 		# get row
 		row = tab.rows[link.index[tab.name]]
 		# update "server side" data
@@ -110,8 +109,8 @@ class GUI:
 			row['nChs'] = new_chapters
 			# determine visibility
 			row['isVisible'] = int(not (
-				new_chapters == 0 and self.settings['hide_unupdated_works'] or  # hide if no new chapters and hide_unupdated_works or
-				int(new_chapters) == -999 and self.settings['hide_errored_updates']  # hide if new_chapters is error and hide_updates_with_errors
+				new_chapters == 0 and self.settings['hide_unupdated_works'] or  # hide if no new chapters and hide_unupdated_works or  # noqa: RUF021
+				int(new_chapters) == -999 and self.settings['hide_errored_updates']  # hide if new_chapters is error and hide_updates_with_errors  # noqa: RUF021
 			))
 		if current_chapter is not None: row['chapter'] = current_chapter  # if current chapter was provided
 		# code to update "client side" data
@@ -125,8 +124,8 @@ class GUI:
 		# run the javascript
 		with tab.grid:
 			ui.run_javascript(js + '\ngrid.applyTransaction({update: [node]})')
-	async def button_pressed(self):
-		'Runs when the button in opened file tab is pressed'
+	async def button_pressed(self) -> None:
+		'Run when the button in opened file tab is pressed.'
 		# name = self.tabs._props['model-value']  # pylint: disable=protected-access
 		name = self.tabs.value
 		tab = self.open_tabs[name]
@@ -136,11 +135,11 @@ class GUI:
 		if not selected:
 			print('no work selected')
 		else:
-			self.edit_work(tab.works[list(selected.values())[0]])
-	def edit_work(self, work):
-		'Opens new tab to allow for editing a work\'s properties'
-		def apply(inputs, work):
-			'Applies changes to work'
+			self.edit_work(tab.works[next(iter(selected.values()))])
+	def edit_work(self, work: Work) -> None:
+		'Open new tab to allow for editing a work\'s properties.'  # noqa: D301
+		def apply(inputs: Dict, work: Work) -> None:
+			'Apply changes to work.'
 			for key, val in inputs.items():
 				if val.__class__ is ui.textarea:
 					work[key] = val.value.split('\n')
@@ -158,36 +157,35 @@ class GUI:
 			tab.tab = ui.tab(work.name)
 		self.tabs.set_value(work.name)
 		# create panel for file
-		with self.panels:
-			with ui.tab_panel(tab.tab).style(GUI.styles.tab_panel) as tab.panel:
-				ui.label(f'Editing: {work.name}')
-				# list to store inputs
-				inputs = Dict()
-				# for each one of work's properties
-				for key, val in work.items():
-					# if key is not 'links'
-					with ui.row().classes('w-full'):
-						# ui.label(key)
-						if key == 'links':
-							inputs[key] = ui.textarea(key.title(), value='\n'.join([link.to_dict() for link in val])).classes('w-full')
-						elif val.__class__ is list:
-							inputs[key] = ui.textarea(key.title(), value='\n'.join(val)).classes('w-full')
-						else:
-							inputs[key] = ui.input(key.title(), value=val).classes('w-full')
-				# create buttons to close or apply tab
+		with self.panels, ui.tab_panel(tab.tab).style(GUI.styles.tab_panel) as tab.panel:
+			ui.label(f'Editing: {work.name}')
+			# list to store inputs
+			inputs = Dict()
+			# for each one of work's properties
+			for key, val in work.items():
+				# if key is not 'links'
 				with ui.row().classes('w-full'):
-					ui.button('Close', on_click=wrap(self.close_tab, work.name)).props('square')
-					ui.button('Apply', on_click=wrap(apply, inputs, work)).props('square')
+					# ui.label(key)
+					if key == 'links':
+						inputs[key] = ui.textarea(key.title(), value='\n'.join([link.to_dict() for link in val])).classes('w-full')
+					elif val.__class__ is list:
+						inputs[key] = ui.textarea(key.title(), value='\n'.join(val)).classes('w-full')
+					else:
+						inputs[key] = ui.input(key.title(), value=val).classes('w-full')
+			# create buttons to close or apply tab
+			with ui.row().classes('w-full'):
+				ui.button('Close', on_click=wrap(self.close_tab, work.name)).props('square')
+				ui.button('Apply', on_click=wrap(apply, inputs, work)).props('square')
 	def save_tab(self, tab, name) -> None:
-		'Saves all works in `Works.all` to file specified'
+		'Save all works in `Works.all` to file specified.'
 		from json import dump
 		with open(self.settings['json_files_dir'] + name + '.json', 'w') as f:
 			dump([work.to_dict() for work in tab.works.values()], f, indent='\t')
 	@rich_try
 	async def _file_opened(self, event: GenericEventArguments) -> None:
-		'Runs when a file is selected in the main tab, creates a new tab for the file'
+		'Run when a file is selected in the main tab, creates a new tab for the file.'
 		def load_file(file: str) -> list | Any:
-			'Runs `add_work(work)` for each work in file specified then returns the name of the file loaded'
+			'Run `add_work(work)` for each work in file specified then returns the name of the file loaded.'
 			from json import load
 
 			# def add_work(*args, _format: str = None, **kwargs) -> Work:
@@ -199,15 +197,19 @@ class GUI:
 			# 	# return works object
 			# 	return Work(format, *args, **kwargs)
 
-			with Path(file).open() as f:
+			with open(file) as f:
 				return load(f, object_hook=lambda kwargs: Work(**kwargs))
 
-		def sort(works: dict | list, settings):
-			'''Sort `cls.all` by given dict, defaults to name'''
-			was_dict = works.__class__ is dict
+		@overload
+		def sort(works: dict, settings: Dict) -> dict: ...
+		@overload
+		def sort(works: list, settings: Dict) -> list: ...
+		def sort(works: dict | list, settings: Dict):
+			'Sort `cls.all` by given dict, defaults to name.'
+			was_dict = isinstance(works, dict)
 			# if `what` is a dict, convert it to a list
 			if was_dict:
-				works = works.values()
+				works = list(works.values())
 			# sort
 			for sort_by in settings.sort_by:
 				if sort_by == 'name':
@@ -226,8 +228,8 @@ class GUI:
 				works = {work.name: work for work in works}
 			return works
 
-		def generate_rowData(works: Iterable, tab: Dict):  # pylint: disable=invalid-name
-			'Turns list of works into list of rows that aggrid can use and group'
+		def generate_rowData(works: abc.Iterable, tab: Dict) -> abc.Generator[dict]:  # noqa: N802
+			'Turn list of works into list of rows that aggrid can use and group.'
 			index = 0
 			# for each work in works
 			for work in works:
@@ -264,7 +266,7 @@ class GUI:
 			else:
 				cols.append({'headerName': val[0], 'field': key, 'aggFunc': val[1], 'width': self.settings['default_column_width']})
 		cols[-1]['resizable'] = False
-		cols[-1]['flex'] = 1  # TODO: test
+		cols[-1]['flex'] = '1'  # TODO: test
 		# load and sort works from file and reference them in open_tabs
 		works = sort(load_file(self.settings['json_files_dir'] + tab_name + '.json'), self.settings)
 		tab = self.open_tabs[tab_name] = Dict({
@@ -284,7 +286,7 @@ class GUI:
 		with self.panels:
 			with ui.tab_panel(tab_name).style(GUI.styles.tab_panel) as tab.panel:
 				tab.label = ui.label('Reading: ')
-				gridOptions = {  # pylint: disable=invalid-name
+				gridOptions = {  # noqa: N806
 					'defaultColDef': {
 						'resizable': True,
 						'suppressMenu': True,
@@ -316,7 +318,7 @@ class GUI:
 		await asyncio.sleep(1)
 		await self.update_all(tab)
 	async def _close_all_other(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add more comments
-		'Is called whenever a row is opened'
+		'Is called whenever a row is opened.'
 		tab_opened = event.args['rowId']
 		# if the row being opened is a child of the currently opened row, do nothing
 		if await ui.run_javascript(f'return getElement({event.sender.id}).gridOptions.api.getRowNode("{tab_opened}").parent.id') in tab.open:
@@ -339,7 +341,7 @@ class GUI:
 		# set open to new opened row
 		tab.open.add(tab_opened)
 	async def update_all(self, tab: Dict) -> None:
-		'Updates all works provided'
+		'Update all works provided.'
 		from requests_html2 import AsyncHTMLSession
 
 		async def update_each(work: Work, tab: Dict, async_session: AsyncHTMLSession) -> None:
@@ -363,12 +365,12 @@ class GUI:
 			tab.tasks = asyncio.gather(*[update_each(work, tab, async_session) for work in tab.works.values()], return_exceptions=True)
 			await tab.tasks
 		print('done updating', tab.name)
-	async def _work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # TODO: Low, add comments
-		'Runs when a work is selected'
+	async def _work_selected(self, tab: Dict, event: GenericEventArguments) -> None:  # pyright: ignore[reportRedeclaration] # TODO: Low, add comments
+		'Run when a work is selected.'
 		def open_link(link: str) -> None:
-			'Opens link provided in new tab'
+			'Open link provided in new tab.'
 			ui.run_javascript(f"window.open('{link}')")
-		event = Dict(event.args)
+		event: Dict = Dict(event.args)
 		# if neither work nor link was selected (not series, author, etc.), do nothing
 		if 'name' not in event.rowId.split('-') and 'data' not in event: return  # NOTE: check for if this is work may break if work's name has `-name-` in it
 		# if reading
@@ -425,7 +427,7 @@ class GUI:
 			# open link
 			open_link(tab.reading.links[0].link)
 	async def _handle_input(self, event: GenericEventArguments) -> None:
-		'Handles input from the5 input box'
+		'Handle input from the5 input box.'
 		# if input is empty, do nothing
 		if (entry := event.sender.value) == '':  # pyright: ignore[reportAttributeAccessIssue]
 			return
@@ -436,7 +438,7 @@ class GUI:
 		if entry[0] == '/':
 			# if is help command: list all commands
 			if entry == '/help':
-				self.popup_text.set_content('\n\n'.join([f"{key}: {val}" for key, val in self.commands.items()]))
+				self.popup_text.set_content('\n\n'.join([f'{key}: {val}' for key, val in self.commands.items()]))
 				self.popup.open()
 			# if is error command: open error codes
 			elif entry == '/error':
@@ -492,12 +494,12 @@ class GUI:
 			# if is not a command: eval or exec as python code and print output
 			else:
 				try:
-					print(eval(entry[1:], globals(), locals()))  # pylint: disable=eval-used
-				except Exception:  # pylint: disable=broad-exception-caught
+					print(eval(entry[1:], globals(), locals()))  # noqa: S307
+				except Exception:  # noqa: BLE001
 					try:
-						print(exec(entry[1:], globals(), locals()))  # pylint: disable=exec-used
-					except Exception:  # pylint: disable=broad-exception-caught
-						console.print_exception(width=os.get_terminal_size().columns)
+						with rich_trace:
+							print(exec(entry[1:], globals(), locals()))  # noqa: S102
+					except Exception:  # noqa: BLE001
 						print(entry)
 		# if is not a command
 		# if reading
@@ -526,8 +528,8 @@ class GUI:
 			pass
 		# clear input
 		event.sender.set_value(None)
-	async def stuff(self):
-		async def autosave():
+	async def stuff(self) -> None:
+		async def autosave() -> None:
 			import datetime
 
 			import dateparser
@@ -570,14 +572,13 @@ class GUI:
 		# "runs" stuff
 		await asyncio.gather(autosave())
 
-class Work(BoxDict):
-	'''object representing a work, eg: a book, a series, a manga, etc.'''
+class Work(Dict, protected_keys={'formats', 'format'}):
+	'Object representing a work, eg: a book, a series, a manga, etc.'
 
 	formats: Dict
-	_protected_keys = BoxDict._protected_keys | {'formats', 'format'}  # noqa: SLF001
 
 	def __init__(self, _format: str, *args: list, **kwargs: dict) -> None:  # pylint:disable=redefined-builtin
-		'''Applies args and kwargs to "`self.__dict__`" if kwarg is in `self.formats[format]`'''
+		'Apply args and kwargs to "`self.__dict__`" if kwarg is in `self.formats[format]`.'
 		self.format = _format
 		props = self.formats[_format]  # Properties  # TODO: when format of work is not in settings, handle it instead of just crashing
 		# convert args from list to dict then update them to kwargs
@@ -622,17 +623,17 @@ class Work(BoxDict):
 				value = int(value)
 		# return converted value
 		return value
-	def re(self):
-		'Why is this called re? no idea'
+	def re(self) -> None:
+		'Why is this called re? no idea.'
 		# create list of links' latest chapters excluding errors and empty strings then get max
 		self.chapter = max([link.latest for link in self.links if not issubclass(link.latest.__class__, Exception) and link.latest != ''])
 		# update new chapters for each link
 		for link in self.links:  # pylint: disable=no-member
 			link.re()
-	def sort(self):
+	def sort(self) -> None:
 		pass
 	def to_dict(self) -> dict:
-		'Returns `self` as a dictionary'
+		'Return `self` as a dictionary.'
 		# d = {'format': self.format}
 		# for key, val in self.items():
 		# 	if val in ([], "None", None):
@@ -650,22 +651,22 @@ class Work(BoxDict):
 			**{'format': self.format},
 			**{
 				key: val if key != 'links' else [link.to_dict() for link in val] for key, val in self.items()
-				if val not in ([], "None", None)
+				if val not in ([], 'None', None)
 				if key not in ('lChs', 'prop')
 				if not (key == 'name' and val == str(id(self)))
 			},
 		}  # convert attributes to a dictionary
 	def work(self) -> Self:
-		'Returns `self`'
+		'Return `self`.'
 		return self
 	def __str__(self) -> str:
-		'Returns `self` in `str` format'
+		'Return `self` in `str` format.'
 		return '<' + self.format + ' Object: {' + ', '.join([f'{key}: {val}' for key, val in self.items() if key != 'name' and val != []]) + '}>'
 	def __repr__(self) -> str:
-		'Represent `self` as `self.name` between <>'
+		'Represent `self` as `self.name` between <>.'
 		return f'<{self.name}>'  # pylint: disable=no-member
-class Link():
-	'Link object, can be updated to get latest chapter'
+class Link:
+	'Link object, can be updated to get latest chapter.'
 
 	def __init__(self, link: str, parent: Work) -> None:
 		if not link.startswith('http'): link = 'https://' + link
@@ -675,7 +676,7 @@ class Link():
 		self.new = self.latest = ''
 		self.index = {}
 	async def update(self, renderers: asyncio.Semaphore, sites: dict, tags_to_skip: list, async_session) -> float | Exception:
-		'''Finds latest chapter from `self.link` then sets result or an error code to `self.latest`
+		'''Find latest chapter from `self.link` then sets result or an error code to `self.latest`.
 
 		# Error Codes:
 			-999.1 = site not supported
@@ -684,7 +685,8 @@ class Link():
 			-999.4 = parsing error
 			-999.5 = whatever was extracted was not a number
 			-999.6 = failed to load plugin
-			-999.7 = plugin error'''
+			-999.7 = plugin error
+		'''
 		import re
 
 		import bs4
@@ -712,18 +714,18 @@ class Link():
 		if sites[0].split('.')[-1] in ('py', 'pyw'):
 			# import plugin
 			try:
-				plugin = __import__(sites[0][:-3]).__dict__[sites[1]]
+				with rich_trace:
+					plugin = __import__(sites[0][:-3]).__dict__[sites[1]]
 			except (ModuleNotFoundError, KeyError) as e:
-				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 				print('plugin loading error:', self.link)
 				self.latest = e
 				return self.re(-999.6)
 			# run plugin
 			try:
-				self.latest = plugin(self.link)
-				return self.re()
+				with rich_trace:
+					self.latest = plugin(self.link)
+					return self.re()
 			except Exception as e:
-				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 				print('plugin error:', self.link)
 				self.latest = e
 				return self.re(-999.7)
@@ -732,7 +734,7 @@ class Link():
 		# tmp: special stuff for royalroad
 		if self.site == 'www.royalroad.com':
 			import time
-			time.sleep(1)
+			time.sleep(1)  # noqa: ASYNC251
 		# connecting to site
 		try:
 			link = await async_session.get(link, follow_redirects=True)  # connecting to the site
@@ -814,7 +816,7 @@ class Link():
 
 		return self.re()
 	def re(self, new: float = None) -> int | float:
-		'Updates `self.new` from `new` arg or calculates if not provided, then returns `self.new`'
+		'Update `self.new` from `new` arg or calculates if not provided, then returns `self.new`.'
 		# why this function is called re? I have no idea
 		if new is None:
 			if not issubclass(self.latest.__class__, Exception):
@@ -823,14 +825,14 @@ class Link():
 				new = self.new
 		self.new = new
 		return new
-	def to_dict(self):
-		'Convert `self` to a string'
+	def to_dict(self) -> str:
+		'Convert `self` to a string.'
 		return self.link
 	def work(self) -> Work:
-		'Returns `self.parent`'
+		'Return `self.parent`.'
 		return self.parent
 	def __repr__(self) -> str:
-		'Represent `self` as `self.link` between <>'
+		'Represent `self` as `self.link` between <>.'
 		return f'<{self.link}>'
 
 
@@ -880,10 +882,9 @@ sites:  # site,         find,        with,                       then_find, and 
 	chapmanganato.com: *008
 	readmanganato.com: *008
 '''
-def main(name: str, *, _dir: str | None = None, settings_file=Path('settings.taml')) -> None:  # pylint: disable=unused-argument
-	'Main function.'
+def main(name: str, *, _dir: str | None = None, settings_file=Path('settings.taml')) -> None:
 	# change environmental variables, increase nicegui import speed
-	os.environ["MATPLOTLIB"] = "false"
+	os.environ['MATPLOTLIB'] = 'false'
 	# change working directory to where file is located unless specified otherwise, just in case
 	os.chdir(_dir or Path(__file__).parent)
 	if __debug__: print(f'working directory: {Path.cwd()}')
@@ -894,7 +895,7 @@ def main(name: str, *, _dir: str | None = None, settings_file=Path('settings.tam
 	# start gui
 	ui.run(dark=settings['dark_mode'], title=name.split('\\')[-1].rstrip('.pyw'), reload=False, show=False)
 def load_settings(settings_file: Path, _default_settings: str = default_settings) -> Dict:
-	'Load and return settings from indicated file, overwriting default settings'
+	'Load and return settings from indicated file, overwriting default settings.'
 	from taml import taml
 
 	def format_sites(settings_file: Path) -> None:  # puts spaces between args so that the 2nd arg of the 1st list starts at the same point as the 2nd arg of the 2nd list and so on
@@ -957,8 +958,8 @@ def load_settings(settings_file: Path, _default_settings: str = default_settings
 	# return settings
 	return settings
 def get_files(settings) -> list[Dict]:
-	'Returns list of files in json_files_dir that ends with .json'
-	return [Dict(name=file.stem) for file in Path.iterdir(Path(settings['json_files_dir'])) if file.suffix == '.json']
+	'Return list of files in json_files_dir that ends with .json.'
+	return [Dict(name=file.name) for file in Path.iterdir(Path(settings['json_files_dir'])) if file.suffix == '.json']
 
 	# out = []
 	# for file in Path.iterdir(Path(settings['json_files_dir'])):

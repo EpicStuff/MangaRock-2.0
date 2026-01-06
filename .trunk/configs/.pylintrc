@@ -1,8 +1,38 @@
 [MAIN]
-py-version=3.13.7
+py-version=3.13
 
 [FORMAT]
 indent-string="\t"
 
 [MESSAGES CONTROL]
-disable=C0103,C0114,C0115,C0116,C0301,C0321,C0410,C0415,E0401,W0603,R0902
+disable=
+	C0103,
+	C0114,
+	C0115,
+	C0116,
+	C0301,
+	C0321,
+	C0410,
+	C0415,
+	C2801,
+	E0102,
+	E0211,  # covered by pylance
+	E0401,
+	E0602,  # covered by ruff
+	R0902,
+	R0903,
+	R0913,
+	R0917,
+	R1732,
+	W0102,
+	W0124,
+	W0212,
+	W0221,
+	W0222,
+	W0511,  # covered by ruff
+	W0603,
+	W0613,  # covered by ruff
+	W0622,  # covered by ruff
+	W0718,  # covered by ruff
+	W0122,  # covered by ruff
+	W0123,  # covered by ruff

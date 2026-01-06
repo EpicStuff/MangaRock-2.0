@@ -1,7 +1,7 @@
 dark_mode: true  # default: true
 font: [OCR A Extended, 8]  # [font name, font size], not yet implemented
-json_files_dir: ../works/ # default: ./
-tags_to_skip: [Skip, Explicit, [Complete, Read], [Oneshot, Read], [Twoshot, Read]] # works with specified tags will have update skipped and be hidden, [A, [B, C]] = A or (B and C)
+json_files_dir: .  # default: ./
+tags_to_skip: [Skip, Explicit, [Complete, Read], [Oneshot, Read], [Twoshot, Read]]  # works with specified tags will have update skipped and be hidden, [A, [B, C]] = A or (B and C)
 autosave:  # default: null, null = disabled, accepts reasonable inputs (eg.: 8:30 pm, 30 min)
 	start: 9:32 pm  # when to start autosaving, does nothing if interval is null
 	interval: 1 min  # interval to autosave, starts whenever if start is null, if is single number, assumes minutes

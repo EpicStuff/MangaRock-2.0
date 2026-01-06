@@ -255,7 +255,7 @@ class GUI:
 			self.tabs.set_value(tab_name)
 			return
 		# get columns to display
-		assert tab_name in self.settings['to_display'], 'Columns for ' + tab_name + ' has not been specified in settings.yaml'  # make sure columns for file has been specified in settings, TODO: do something instead of crash
+		assert tab_name in self.settings.to_display, 'Columns for ' + tab_name + ' has not been specified in settings.yaml'  # make sure columns for file has been specified in settings, TODO: do something instead of crash
 		cols = [{'field': 'isVisible', 'aggFunc': 'max', 'hide': True}]
 		# convert into aggrid cols format
 		for key, val in self.settings.to_display[tab_name].items():
@@ -958,7 +958,13 @@ def load_settings(settings_file: Path, _default_settings: str = default_settings
 	return settings
 def get_files(settings) -> list[Dict]:
 	'Returns list of files in json_files_dir that ends with .json'
-	return [Dict(name=file.name) for file in Path.iterdir(Path(settings['json_files_dir'])) if file.suffix == '.json']
+	return [Dict(name=file.stem) for file in Path.iterdir(Path(settings['json_files_dir'])) if file.suffix == '.json']
+
+	# out = []
+	# for file in Path.iterdir(Path(settings['json_files_dir'])):
+	# 	if file.suffix == '.json':
+	# 		out.append(Dict(name=file.stem))
+	# return out
 
 
 if __name__ in {'__main__', '__mp_main__'}:

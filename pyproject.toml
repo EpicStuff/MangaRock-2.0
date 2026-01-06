@@ -1,8 +1,8 @@
 [tool.ruff]
-extend = '.trunk/configs/ruff.toml'
+	extend = '.trunk/configs/ruff.toml'
 
-[tool.ruff.lint]
-extend-ignore = ['RUF013']
+	[tool.ruff.lint]
+		extend-ignore = ['RUF013']
 
 [tool.mypy]
-implicit_optional = true
+	implicit_optional = true

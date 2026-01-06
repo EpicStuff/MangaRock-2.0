@@ -1,8 +1,9 @@
 # Version: 3.7.1, pylint: disable=invalid-name # ruff: noqa: PLC0415, C901
 from __future__ import annotations
+
 import asyncio, os
 from pathlib import Path
-from typing import Any, Self, overload, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Self, overload
 
 from epicstuff import Dict, install_trace, open, rich_trace, rich_try, wrap  # noqa: A004
 from nicegui import app, ui
@@ -10,6 +11,7 @@ from nicegui_aggrid import AgDict, enterprise
 
 if TYPE_CHECKING:
 	from collections import abc
+
 	from nicegui.events import GenericEventArguments
 
 install_trace(False)
@@ -532,8 +534,7 @@ class GUI:
 		async def autosave() -> None:
 			import datetime
 
-			import dateparser
-			import pytimeparse
+			import dateparser, pytimeparse
 
 			# if autosave interval is not provided, disable autosave
 			if self.settings['autosave']['interval'] is None:
@@ -707,7 +708,7 @@ class Link:
 					self.latest = Exception('skipped')
 					return self.re(0)
 				# if tag is list and all tags in list are in work
-				if isinstance(tag, list) and all([t in self.parent.tags for t in tag]):
+				if isinstance(tag, list) and all(t in self.parent.tags for t in tag):
 					self.latest = Exception('skipped')
 					return self.re(0)
 		# if is "plugin"

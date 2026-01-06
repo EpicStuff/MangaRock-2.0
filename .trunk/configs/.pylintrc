@@ -25,6 +25,8 @@ disable=
 	R0917,
 	R1732,
 	W0102,
+	W0122,  # covered by ruff
+	W0123,  # covered by ruff
 	W0124,
 	W0212,
 	W0221,
@@ -35,5 +37,3 @@ disable=
 	W0613,  # covered by ruff
 	W0622,  # covered by ruff
 	W0718,  # covered by ruff
-	W0122,  # covered by ruff
-	W0123,  # covered by ruff

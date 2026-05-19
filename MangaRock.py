@@ -27,7 +27,7 @@ class GUI:
 	def __init__(self, settings: Dict, files: list[Dict]) -> None:
 		# setup vars
 		self.settings = settings
-		self.open_tabs = Dict({'Main': {'name': 'Main'}}, _convert=True)
+		self.open_tabs: Dict[str, Dict[str, Any]] = Dict({'Main': {'name': 'Main'}}, _convert=True)
 		self.commands = {
 			'/help': 'list all commands',
 			'/debug': 'open debug tab',
@@ -83,7 +83,7 @@ class GUI:
 		self.open_tabs.debug = Dict()
 		with self.tabs:
 			ui.tab('Debug')
-		with self.panels, ui.tab_panel('Debug').style(GUI.styles.tab_panel):
+		with self.panels, ui.tab_panel('Debug'):
 			ui.label('Updating:')
 			with ui.row().classes('w-full'):
 				self.open_tabs.debug.updating = ui.table(columns=[{'name': 'name', 'label': 'updating', 'field': 'name'}], rows=[], row_key='name')
@@ -159,7 +159,7 @@ class GUI:
 			tab.tab = ui.tab(work.name)
 		self.tabs.set_value(work.name)
 		# create panel for file
-		with self.panels, ui.tab_panel(tab.tab).style(GUI.styles.tab_panel) as tab.panel:
+		with self.panels, ui.tab_panel(tab.tab) as tab.panel:
 			ui.label(f'Editing: {work.name}')
 			# list to store inputs
 			inputs = Dict()
@@ -184,7 +184,7 @@ class GUI:
 		with open(self.settings['json_files_dir'] + name + '.json', 'w') as f:
 			dump([work.to_dict() for work in tab.works.values()], f, indent='\t')
 	@rich_try
-	async def _file_opened(self, event: GenericEventArguments) -> None:
+	async def _file_opened(self, event: GenericEventArguments | Dict) -> None:
 		'Run when a file is selected in the main tab, creates a new tab for the file.'
 		def load_file(file: str) -> list | Any:
 			'Run `add_work(work)` for each work in file specified then returns the name of the file loaded.'
@@ -286,7 +286,7 @@ class GUI:
 		self.tabs.set_value(tab_name)
 		# create panel for file
 		with self.panels:
-			with ui.tab_panel(tab_name).style(GUI.styles.tab_panel) as tab.panel:
+			with ui.tab_panel(tab_name) as tab.panel:
 				tab.label = ui.label('Reading: ')
 				gridOptions = {  # noqa: N806
 					'defaultColDef': {
@@ -429,12 +429,12 @@ class GUI:
 			# open link
 			open_link(tab.reading.links[0].link)
 	async def _handle_input(self, event: GenericEventArguments) -> None:
-		'Handle input from the5 input box.'
+		'Handle input from the input box.'
 		# if input is empty, do nothing
 		if (entry := event.sender.value) == '':  # pyright: ignore[reportAttributeAccessIssue]
 			return
 		# get name of open tab, the tab, and the value
-		name = self.tabs.value.label
+		name: str = self.tabs.value.label
 		tab = self.open_tabs[name]
 		# if is a command
 		if entry[0] == '/':
@@ -752,66 +752,66 @@ class Link:
 				# print('rendering', self.link, '-', self.site)
 				async with renderers:  # limit the number of works rendering at a time
 					# render link
-					async with link.async_render(reload=True, wait_until='networkidle'): pass
+					with rich_trace:
+						async with link.async_render(reload=True, wait_until='networkidle'): pass
 				# print('done rendering', self.link, '-', self.site)
 			except Exception as e:
 				print('failed to render:', self.link)  # render error
 				link = str(link)
-				console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 				self.latest = e
 				return self.re(-999.3)
 		# process link
 		try:
-			# convert link into bs4 object
-			link = bs4.BeautifulSoup(link.content, 'lxml')
-			# sites: find, with
-			tmp = link.find(sites[0], sites[1])
-			assert tmp is not None
-			link = tmp
-			# if sites: "then find" and "and get" = null
-			if sites[2] is None and sites[3] is None:
-				# get contents
-				tmp = link.contents[0]
+			with rich_trace:
+				# convert link into bs4 object
+				link = bs4.BeautifulSoup(link.content, 'lxml')
+				# sites: find, with
+				tmp = link.find(sites[0], sites[1])
 				assert tmp is not None
 				link = tmp
-			# if sites: "then find" = null
-			elif sites[2] is None:
-				# get sites: "and get"
-				tmp = link.get(sites[3])
-				assert tmp is not None
-				link = tmp
-			# sites: "then find" != null
-			else:
-				# find sites: "then find"
-				tmp = link.find(sites[2])
-				assert tmp is not None
-				link = tmp
-				# if sites: "and get" = null
-				if sites[3] is None:
+				# if sites: "then find" and "and get" = null
+				if sites[2] is None and sites[3] is None:
 					# get contents
-					tmp = link.get_text()
+					tmp = link.contents[0]
 					assert tmp is not None
 					link = tmp
-				# else
-				else:
+				# if sites: "then find" = null
+				elif sites[2] is None:
 					# get sites: "and get"
 					tmp = link.get(sites[3])
 					assert tmp is not None
 					link = tmp
+				# sites: "then find" != null
+				else:
+					# find sites: "then find"
+					tmp = link.find(sites[2])
+					assert tmp is not None
+					link = tmp
+					# if sites: "and get" = null
+					if sites[3] is None:
+						# get contents
+						tmp = link.get_text()
+						assert tmp is not None
+						link = tmp
+					# else
+					else:
+						# get sites: "and get"
+						tmp = link.get(sites[3])
+						assert tmp is not None
+						link = tmp
 		except (AttributeError, AssertionError) as e:
 			link = str(link)
-			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # parsing error
 			return self.re(-999.4)
 		# convert remaining html to float
 		try:
-			self.latest = float(re.split(sites[4], link)[sites[5]])  # else link parsing went fine: extract latest chapter from link using lookup table
-			# convert latest chapter to int if has .0
-			if int(self.latest) == self.latest:
-				self.latest = int(self.latest)
+			with rich_trace:
+				self.latest = float(re.split(sites[4], link)[sites[5]])  # else link parsing went fine: extract latest chapter from link using lookup table
+				# convert latest chapter to int if has .0
+				if int(self.latest) == self.latest:
+					self.latest = int(self.latest)
 		except Exception as e:
 			link = str(link)
-			console.print_exception(show_locals=True, width=os.get_terminal_size().columns)
 			self.latest = e  # whatever was extracted was not a number
 			return self.re(-999.5)
 
